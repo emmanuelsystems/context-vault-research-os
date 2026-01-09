@@ -337,12 +337,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Export app for Vercel (must be default export)
 export default app;
 
-// Only listen if running directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => {
-        console.log(`MCP Server running on port ${PORT}`);
-        console.log(`SSE Endpoint: http://localhost:${PORT}/sse`);
-    });
-}
+// If you need to run this locally, use a separate entry point (e.g. dev-server.ts)
+// or rely on the `tsx` command in package.json which runs the CLI.
+
 
