@@ -321,11 +321,23 @@ app.post("/message", async (req, res) => {
     await transport.handlePostMessage(req, res);
 });
 
-// Export app for Vercel
+// Global Error Handler to prevent crashes
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Unhandled Server Error:", err);
+    if (res.headersSent) {
+        return next(err);
+    }
+    res.status(500).json({
+        error: "Internal Server Error",
+        message: err.message || "Unknown error",
+        stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
+    });
+});
+
+// Export app for Vercel (must be default export)
 export default app;
 
-// Only listen if running directly (not imported as a module)
-// @ts-ignore
+// Only listen if running directly
 if (import.meta.url === `file://${process.argv[1]}`) {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
