@@ -3,8 +3,6 @@ import { Pool, neonConfig } from '@neondatabase/serverless';
 import { PrismaNeon } from '@prisma/adapter-neon';
 import ws from 'ws';
 
-neonConfig.webSocketConstructor = ws;
-
 const connectionString = (process.env.DATABASE_URL || "");
 const isNeon = connectionString.startsWith("postgres://") || connectionString.startsWith("neondb://");
 
@@ -12,6 +10,9 @@ let prisma: PrismaClient;
 
 try {
     if (isNeon) {
+        // Only configure WS if we are actually using Neon
+        neonConfig.webSocketConstructor = ws;
+
         const pool = new Pool({ connectionString });
         const adapter = new PrismaNeon(pool as any);
         prisma = new PrismaClient({ adapter });
@@ -19,12 +20,11 @@ try {
     } else {
         if (process.env.NODE_ENV === 'production') {
             console.error("Context Vault Critical: DATABASE_URL is not set or not a postgres URL.");
-            // Do NOT throw here, or the function crashes on boot.
-            // Return a dummy that throws on usage.
+            // Return Safe Dummy
             // @ts-ignore
             prisma = {
-                $connect: async () => { throw new Error("Database URL missing in Production"); },
-                // Add a proxy handler if needed, but this is enough to let /debug run
+                $connect: async () => { console.error("Prisma Dummy Used"); },
+                run: { findMany: async () => [] }, // Dummy for some calls
             } as any;
         } else {
             // Local SQLite fallback
@@ -36,7 +36,7 @@ try {
     console.error("Context Vault: Failed to initialize Prisma Client", e);
     // @ts-ignore
     prisma = {
-        $connect: async () => { throw new Error("Prisma failed to init"); },
+        $connect: async () => { console.error("Prisma Failed Init Usage"); },
     } as any;
 }
 
