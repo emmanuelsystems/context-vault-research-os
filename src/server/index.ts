@@ -274,6 +274,17 @@ app.get("/runs/:id", async (req, res) => {
 });
 
 
+app.get("/debug", (req, res) => {
+    res.json({
+        status: "ok",
+        env: {
+            has_db_url: !!process.env.DATABASE_URL,
+            db_url_start: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 10) : "N/A",
+            node_env: process.env.NODE_ENV
+        }
+    });
+});
+
 const transports = new Map<string, SSEServerTransport>();
 
 app.get("/sse", async (req, res) => {
