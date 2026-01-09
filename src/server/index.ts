@@ -248,6 +248,32 @@ server.resource(
 );
 
 
+// --- UI API Endpoints ---
+
+app.get("/runs", async (req, res) => {
+    try {
+        const runs = await RunManager.listRuns();
+        res.json(runs);
+    } catch (e) {
+        res.status(500).json({ error: "Failed to list runs" });
+    }
+});
+
+app.get("/runs/:id", async (req, res) => {
+    try {
+        const run = await RunManager.getRun(req.params.id);
+        if (!run) {
+            res.status(404).json({ error: "Run not found" });
+            return;
+        }
+        const artifacts = await ArtifactManager.listArtifacts(req.params.id);
+        res.json({ ...run, artifacts });
+    } catch (e) {
+        res.status(500).json({ error: "Failed to get run" });
+    }
+});
+
+
 const transports = new Map<string, SSEServerTransport>();
 
 app.get("/sse", async (req, res) => {
