@@ -13,7 +13,7 @@ let prisma: PrismaClient;
 try {
     if (isNeon) {
         const pool = new Pool({ connectionString });
-        const adapter = new PrismaNeon(pool);
+        const adapter = new PrismaNeon(pool as any);
         prisma = new PrismaClient({ adapter });
         console.log("Context Vault: Connected to Neon (Serverless)");
     } else {
