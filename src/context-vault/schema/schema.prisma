@@ -1,0 +1,44 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Run {
+  id               String        @id
+  title            String
+  primary_question String
+  domain           String
+  status           String // RunStatus: Draft, HandshakeApproved, ReadyForExecution, InProgress, ReadyForBanking, Banked
+  owner_user_id    String
+  approver_user_id String?
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  artifacts        RunArtifact[]
+
+  @@index([status])
+  @@index([domain])
+}
+
+model RunArtifact {
+  id             String   @id @default(uuid())
+  run_id         String
+  run            Run      @relation(fields: [run_id], references: [id])
+  artifact_type  String // HS, PM, CH, OUTPUT, DT, RL
+  status         String   @default("Draft") // ArtifactStatus: Draft, Approved, Final
+  payload        String // JSON payload
+  schema_version Int      @default(1)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  engine         String? // For OUTPUT/PM
+  container      String? // For OUTPUT/PM
+
+  @@index([run_id])
+  @@index([artifact_type])
+}

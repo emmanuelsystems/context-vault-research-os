@@ -1,0 +1,34 @@
+{
+  "name": "context-vault-research-os",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "tsx verify-run.ts",
+    "dev": "tsx src/research-os/cli/index.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emmanuelsystems/context-vault-research-os.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/emmanuelsystems/context-vault-research-os/issues"
+  },
+  "homepage": "https://github.com/emmanuelsystems/context-vault-research-os#readme",
+  "description": "",
+  "devDependencies": {
+    "@prisma/client": "^6.19.1",
+    "@types/node": "^25.0.3",
+    "prisma": "^6.19.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "zod": "^4.3.5"
+  }
+}

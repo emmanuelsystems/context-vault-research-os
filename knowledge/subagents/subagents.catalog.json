@@ -1,0 +1,59 @@
+[
+    {
+        "id": "subagent-eval-runner",
+        "name": "Evaluation Runner",
+        "role": "Evaluator",
+        "description": "Runs standard benchmarks.",
+        "engines": [
+            "engine-eval-runner",
+            "engine-risk-explorer"
+        ],
+        "skills": [
+            "eval.run_suite",
+            "eval.analyze_results"
+        ],
+        "safety_tier": "Tier-1"
+    },
+    {
+        "id": "subagent-comparator",
+        "name": "Comparator",
+        "role": "Analyst",
+        "description": "Compares two systems.",
+        "engines": [
+            "engine-comparator"
+        ],
+        "skills": [
+            "compare.diff_systems",
+            "compare.write_matrix"
+        ],
+        "safety_tier": "Tier-1"
+    },
+    {
+        "id": "subagent-citation",
+        "name": "CitationAgent",
+        "role": "Librarian",
+        "description": "Verifies claims and formats sources.",
+        "engines": [
+            "*"
+        ],
+        "skills": [
+            "citation.verify_claim",
+            "citation.write_retrieval_log"
+        ],
+        "safety_tier": "Tier-0"
+    },
+    {
+        "id": "subagent-pilot-manager",
+        "name": "Pilot Manager",
+        "role": "Ops",
+        "description": "Deploys and monitors pilots.",
+        "engines": [
+            "engine-pilot-orchestrator"
+        ],
+        "skills": [
+            "pilot.deploy",
+            "pilot.monitor"
+        ],
+        "safety_tier": "Tier-2"
+    }
+]

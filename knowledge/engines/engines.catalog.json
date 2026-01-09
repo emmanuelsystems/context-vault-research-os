@@ -1,0 +1,64 @@
+[
+    {
+        "id": "engine-risk-explorer",
+        "name": "Risk Explorer",
+        "family": "verify",
+        "description": "Deep dive into failure modes and safety risks.",
+        "typical_inputs": [
+            "Model Card",
+            "System Card"
+        ],
+        "typical_outputs": [
+            "Risk Brief"
+        ],
+        "default_containers": [
+            "container-risk-brief"
+        ]
+    },
+    {
+        "id": "engine-comparator",
+        "name": "Comparator",
+        "family": "compare",
+        "description": "Side-by-side comparison of two models or systems.",
+        "typical_inputs": [
+            "Baseline",
+            "Candidate"
+        ],
+        "typical_outputs": [
+            "Comparison Matrix"
+        ],
+        "default_containers": [
+            "container-comparison-matrix"
+        ]
+    },
+    {
+        "id": "engine-eval-runner",
+        "name": "Evaluation Runner",
+        "family": "verify",
+        "description": "Runs automated benchmark suites.",
+        "typical_inputs": [
+            "Model Endpoint"
+        ],
+        "typical_outputs": [
+            "Eval Report"
+        ],
+        "default_containers": [
+            "container-metric-report"
+        ]
+    },
+    {
+        "id": "engine-pilot-orchestrator",
+        "name": "Pilot Orchestrator",
+        "family": "choose",
+        "description": "Manages a limited-scope live deployment.",
+        "typical_inputs": [
+            "Pilot Config"
+        ],
+        "typical_outputs": [
+            "Pilot Outcome Brief"
+        ],
+        "default_containers": [
+            "container-pilot-brief"
+        ]
+    }
+]

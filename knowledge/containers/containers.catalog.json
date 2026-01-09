@@ -1,0 +1,70 @@
+[
+    {
+        "id": "container-risk-brief",
+        "name": "Risk Brief",
+        "description": "Summary of safety risks and mitigations.",
+        "slots": [
+            {
+                "id": "failure-modes",
+                "label": "Key Failure Modes",
+                "description": "List of identified failure modes.",
+                "min_items": 1,
+                "accepts_sources": true
+            },
+            {
+                "id": "mitigations",
+                "label": "Proposed Mitigations",
+                "description": "Guardrails to prevent failures.",
+                "min_items": 1
+            }
+        ]
+    },
+    {
+        "id": "container-comparison-matrix",
+        "name": "Comparison Matrix",
+        "description": "Grid comparing Baseline vs Candidate.",
+        "slots": [
+            {
+                "id": "dimensions",
+                "label": " Comparison Dimensions",
+                "description": "Rows of the matrix (latency, quality, safety).",
+                "min_items": 3
+            },
+            {
+                "id": "verdict",
+                "label": "Verdict",
+                "description": "Clear recommendation on which is better.",
+                "min_items": 1
+            }
+        ]
+    },
+    {
+        "id": "container-pilot-brief",
+        "name": "Pilot Outcome Brief",
+        "description": "Results from a live pilot.",
+        "slots": [
+            {
+                "id": "metrics",
+                "label": "Success Metrics",
+                "description": "Quantitative results."
+            },
+            {
+                "id": "user-feedback",
+                "label": "User Feedback",
+                "description": "Qualitative themes."
+            }
+        ]
+    },
+    {
+        "id": "container-metric-report",
+        "name": "Metric Report",
+        "description": "Raw numbers from an eval suite.",
+        "slots": [
+            {
+                "id": "scores",
+                "label": "Benchmark Scores",
+                "description": "Key metric results."
+            }
+        ]
+    }
+]
