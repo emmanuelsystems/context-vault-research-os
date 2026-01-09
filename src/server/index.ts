@@ -7,7 +7,11 @@ const server = new McpServer({
     version: "1.0.0",
 });
 
+import cors from "cors";
+
 const app = express();
+app.use(cors()); // Allow all origins for MCP
+app.use(express.json());
 
 
 import { z } from "zod";
@@ -294,8 +298,9 @@ app.get("/sse", async (req, res) => {
     const sessionId = Math.random().toString(36).substring(7);
 
     // transport expects an endpoint where subsequent messages should be sent.
-    // We append the sessionId so we can route the POST request back to this specific transport.
-    const transport = new SSEServerTransport(`/message?sessionId=${sessionId}`, res);
+    // On Vercel, we should ensure the path is absolute relative to the domain if possible,
+    // or at least matches the expected rewrite.
+    const transport = new SSEServerTransport(`/api/message?sessionId=${sessionId}`, res);
 
     transports.set(sessionId, transport);
 
@@ -307,7 +312,7 @@ app.get("/sse", async (req, res) => {
     await server.connect(transport);
 });
 
-app.post("/message", async (req, res) => {
+app.post("/api/message", async (req, res) => {
     const sessionId = req.query.sessionId as string;
     const transport = transports.get(sessionId);
 
