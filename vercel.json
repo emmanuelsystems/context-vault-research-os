@@ -1,6 +1,14 @@
 {
     "rewrites": [
         {
+            "source": "/sse",
+            "destination": "/api/index"
+        },
+        {
+            "source": "/message",
+            "destination": "/api/index"
+        },
+        {
             "source": "/api/(.*)",
             "destination": "/api/index"
         },
