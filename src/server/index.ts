@@ -250,7 +250,7 @@ server.resource(
 
 // --- UI API Endpoints ---
 
-app.get("/runs", async (req, res) => {
+app.get("/api/runs", async (req, res) => {
     try {
         const runs = await RunManager.listRuns();
         res.json(runs);
@@ -259,7 +259,7 @@ app.get("/runs", async (req, res) => {
     }
 });
 
-app.get("/runs/:id", async (req, res) => {
+app.get("/api/runs/:id", async (req, res) => {
     try {
         const run = await RunManager.getRun(req.params.id);
         if (!run) {
@@ -274,7 +274,7 @@ app.get("/runs/:id", async (req, res) => {
 });
 
 
-app.get("/debug", (req, res) => {
+app.get("/api/debug", (req, res) => {
     res.json({
         status: "ok",
         env: {
