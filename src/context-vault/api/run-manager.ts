@@ -9,6 +9,7 @@ export const RunManager = {
         primary_question: string;
         domain: string;
         owner_user_id: string;
+        stake_level?: 'low' | 'medium' | 'high';
     }) => {
         return prisma.run.create({
             data: {
@@ -17,7 +18,8 @@ export const RunManager = {
                 primary_question: data.primary_question,
                 domain: data.domain,
                 owner_user_id: data.owner_user_id,
-                status: 'Draft',
+                stake_level: data.stake_level || 'medium',
+                status: 'draft',
             },
         });
     },

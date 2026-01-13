@@ -10,35 +10,70 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// PRD v2 Status: draft → in_progress → judged → banked
+// PRD v2 Stake: low | medium | high
 model Run {
-  id               String        @id
+  id               String            @id
   title            String
   primary_question String
   domain           String
-  status           String // RunStatus: Draft, HandshakeApproved, ReadyForExecution, InProgress, ReadyForBanking, Banked
+  stake_level      String            @default("medium") // low | medium | high
+  status           String            @default("draft") // draft | in_progress | judged | banked
   owner_user_id    String
   approver_user_id String?
-  created_at       DateTime      @default(now())
-  updated_at       DateTime      @updatedAt
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
   artifacts        RunArtifact[]
+  receipts         DecisionReceipt[]
 
   @@index([status])
   @@index([domain])
+  @@index([stake_level])
 }
 
+// PRD v2 Artifact Types: HS, PM, RC, RP, RL, DT
 model RunArtifact {
   id             String   @id @default(uuid())
   run_id         String
   run            Run      @relation(fields: [run_id], references: [id])
-  artifact_type  String // HS, PM, CH, OUTPUT, DT, RL
-  status         String   @default("Draft") // ArtifactStatus: Draft, Approved, Final
+  artifact_type  String // HS | PM | RC | RP | RL | DT
+  status         String   @default("draft") // draft | approved | final
   payload        String // JSON payload
-  schema_version Int      @default(1)
+  schema_version String   @default("v1.0")
+  content_ref    String? // URL or blob id for external content
+  links          String? // JSON array of refs: source_ids, artifact_ids
+  tags           String? // JSON array: {User Stated} | {Inference} | {Assumption}
+  created_by     String?
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
-  engine         String? // For OUTPUT/PM
-  container      String? // For OUTPUT/PM
+  engine         String? // For RP/PM
+  container      String? // For RP/PM
 
   @@index([run_id])
   @@index([artifact_type])
+}
+
+// PRD v2 Decision Receipts - emitted at commit points
+// Commit Points: HS_LOCKED | PATH_SELECTED | CHARTER_APPROVED | FINAL_DECISION_COMMITTED
+model DecisionReceipt {
+  id              String   @id @default(uuid())
+  run_id          String
+  run             Run      @relation(fields: [run_id], references: [id])
+  commit_point    String // HS_LOCKED | PATH_SELECTED | CHARTER_APPROVED | FINAL_DECISION_COMMITTED
+  summary         String?
+  inputs          String? // JSON array
+  constraints     String? // JSON array
+  decision_makers String? // JSON array
+  outcome         String?
+  actions         String? // JSON array
+  follow_up       String? // JSON array
+  confidence      Float?
+  approvals       String? // JSON array: [{name, role, approved_at}]
+  evidence_links  String? // JSON array: points to RL entries
+  dt_artifact_id  String? // Reference to the DT artifact at this point
+  created_at      DateTime @default(now())
+
+  @@unique([run_id, commit_point])
+  @@index([run_id])
+  @@index([commit_point])
 }
