@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 import { Catalog } from '../../catalog.js';
 
 const pathmap = new Command('pathmap');
@@ -69,6 +70,12 @@ pathmap.command('create')
                 artifact_type: 'PM',
                 payload: payload,
                 status: 'Draft'
+            });
+            FileStorage.saveArtifact(run.id, 'PM', payload);
+            FileStorage.saveReceipt(run.id, 'path_selected', {
+                artifact_id: artifact.id,
+                selected_paths: rows.length,
+                created_at: new Date().toISOString()
             });
 
             console.log(`\nPath Map Generated!`);

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 import { Catalog } from '../../catalog.js';
 
 const charter = new Command('charter');
@@ -69,6 +70,12 @@ charter.command('create')
                 artifact_type: 'CH',
                 payload: payload,
                 status: 'Approved' // Auto-approve for speedrun flow, normally Draft
+            });
+            FileStorage.saveArtifact(run.id, 'CH', payload);
+            FileStorage.saveReceipt(run.id, 'charter_approved', {
+                artifact_id: artifact.id,
+                mapped_engines: mapping.length,
+                approved_at: new Date().toISOString()
             });
 
             console.log(`\nCharter Created!`);

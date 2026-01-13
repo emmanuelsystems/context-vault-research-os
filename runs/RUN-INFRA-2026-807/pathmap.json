@@ -1,0 +1,13 @@
+{
+  "run_id": "RUN-INFRA-2026-807",
+  "rows": [
+    {
+      "path_name": "Path using Pilot Orchestrator",
+      "engine": "engine-pilot-orchestrator",
+      "container": "container-pilot-brief",
+      "objective": "Manages a limited-scope live deployment.",
+      "time_estimate": "1 day",
+      "risk": "Low"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
+import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 
 const run = new Command('run');
 
@@ -30,6 +31,18 @@ run.command('init')
                 domain: options.domain,
                 owner_user_id: process.env.USER || 'DefaultUser',
                 stake_level: options.stake as 'low' | 'medium' | 'high',
+            });
+
+            FileStorage.initRunFolder(run.id);
+            FileStorage.saveRunMetadata(run.id, {
+                run_id: run.id,
+                title: run.title,
+                primary_question: run.primary_question,
+                domain: run.domain,
+                owner_user_id: run.owner_user_id,
+                stake_level: run.stake_level,
+                status: run.status,
+                created_at: run.created_at?.toISOString?.() ?? new Date().toISOString()
             });
 
             console.log(`\nRun Initialized Successfully!`);

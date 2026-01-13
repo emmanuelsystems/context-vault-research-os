@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 import fs from 'fs';
 
 const output = new Command('output');
@@ -32,6 +33,7 @@ output.command('add')
                 engine: options.engine,
                 container: options.container
             });
+            FileStorage.saveArtifact(options.run, 'OUTPUT', payload);
 
             console.log(`\nOutput Artifact Added!`);
             console.log(`ID: ${artifact.id}`);

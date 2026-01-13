@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 import fs from 'fs';
 
 const retrievalLog = new Command('retrieval-log');
@@ -33,6 +34,7 @@ retrievalLog.command('add')
                 payload: payload,
                 status: 'Final'
             });
+            FileStorage.saveArtifact(options.run, 'RL', payload);
 
             console.log(`\nRetrieval Log Added!`);
             console.log(`ID: ${artifact.id}`);

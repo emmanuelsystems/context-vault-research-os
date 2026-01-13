@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 
 const decision = new Command('decision');
 
@@ -41,6 +42,15 @@ decision.command('create')
                 payload: payload,
                 status: 'Final'
             });
+            FileStorage.saveArtifact(run.id, 'DT', payload);
+
+            if (options.type === 'final_decision') {
+                FileStorage.saveReceipt(run.id, 'final_decision_committed', {
+                    artifact_id: artifact.id,
+                    chosen_option: payload.chosen_option,
+                    committed_at: new Date().toISOString()
+                });
+            }
 
             console.log(`\nDecision Trace Created!`);
             console.log(`ID: ${artifact.id}`);

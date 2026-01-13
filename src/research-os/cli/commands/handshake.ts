@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 
 const handshake = new Command('handshake');
 
@@ -38,6 +39,12 @@ handshake.command('create')
                 payload: payload,
                 status: 'Approved' // Auto-approve for the sample flow speedrun, or 'Draft' normally.
                 // PRD says Step 2 is explicit approval. Let's start with Draft.
+            });
+            FileStorage.saveArtifact(run.id, 'HS', payload);
+            FileStorage.saveReceipt(run.id, 'hs_locked', {
+                artifact_id: artifact.id,
+                decision_type: options.type,
+                locked_at: new Date().toISOString()
             });
 
             // For the sake of the "speedrun" in the prompt, let's allow an --auto-approve flag?
