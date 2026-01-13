@@ -297,10 +297,14 @@ app.get("/sse", async (req, res) => {
     // Create a unique session ID for this connection
     const sessionId = Math.random().toString(36).substring(7);
 
-    // transport expects an endpoint where subsequent messages should be sent.
-    // On Vercel, we should ensure the path is absolute relative to the domain if possible,
-    // or at least matches the expected rewrite.
-    const transport = new SSEServerTransport(`/api/message?sessionId=${sessionId}`, res);
+    // Build an absolute message URL so clients (incl. ChatGPT Apps) don't have to resolve a relative path.
+    const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString();
+    const proto = (req.headers['x-forwarded-proto'] || 'https').toString();
+    const base = process.env.MCP_BASE_URL || `${proto}://${host}`;
+    const messagePath = `/api/message?sessionId=${sessionId}`;
+    const messageUrl = `${base}${messagePath}`;
+
+    const transport = new SSEServerTransport(messageUrl, res);
 
     transports.set(sessionId, transport);
 
