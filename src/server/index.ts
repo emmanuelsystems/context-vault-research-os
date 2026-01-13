@@ -298,9 +298,10 @@ app.get("/sse", async (req, res) => {
     const sessionId = Math.random().toString(36).substring(7);
 
     // Build an absolute message URL so clients (incl. ChatGPT Apps) don't have to resolve a relative path.
-    const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString();
+    const hostHeader = (req.headers['x-forwarded-host'] || req.headers.host || '').toString();
     const proto = (req.headers['x-forwarded-proto'] || 'https').toString();
-    const base = process.env.MCP_BASE_URL || `${proto}://${host}`;
+    const baseFromHeaders = hostHeader ? `${proto}://${hostHeader}` : undefined;
+    const base = process.env.MCP_BASE_URL || baseFromHeaders || 'https://context-vault-research-os.vercel.app';
     const messagePath = `/api/message?sessionId=${sessionId}`;
     const messageUrl = `${base}${messagePath}`;
 
