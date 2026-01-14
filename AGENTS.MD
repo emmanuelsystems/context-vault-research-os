@@ -220,3 +220,70 @@ If you like, next step I can draft example JSON stubs for:
 - one subagent (`Evaluation Runner`)
 
 that match what you already have in the Notion doc, so you can drop them straight into `/knowledge`.
+
+---
+
+## Coherence handshake (lock before Path Map)
+
+This repo is being aligned around a four-layer system that must not blur:
+
+- **Research OS**: the reasoning workflow and run spine (the sequence of commit points); produces typed artifacts and receipts.
+- **Context Vault**: canonical storage + reuse; versioning and auditability for all run artifacts.
+- **Context Graph**: trace layer for the “why chain”; a graph-shaped view derived from receipts + evidence links (and optionally persisted).
+- **Runner (co-work / CLI)**: execution surface; enforces permission tiers + verification gates tied to stake level.
+
+### Control problem (why this exists)
+
+As runner capability increases (especially CLI and filesystem access), we need durable external artifacts that preserve:
+
+- what the agent was asked to do (intent + constraints)
+- what context it used (inputs + sources)
+- what it did (actions + outputs)
+- why it made its decisions (decision moments with evidence)
+
+### Handshake guarantees (must be true before advancing)
+
+- **One locked primary question** (recorded in HS)
+- **Locked definitions** for OS / Vault / Graph / Runner (this section is the canonical baseline)
+- **Named unknowns** that must drive Path Map options (recorded in HS/PM)
+- **Runner expectations**: permission tier + verification bundle required for this run (recorded in CH and enforced by CLI)
+- **Assumptions are visible**, each with a test method and “what would change my mind” check (recorded in HS/DT)
+
+### Commit points (receipts)
+
+At minimum, the OS defines these commit points:
+
+- `HS_LOCKED`
+- `PATH_SELECTED`
+- `CHARTER_APPROVED`
+- `FINAL_DECISION_COMMITTED`
+
+Each commit point emits a **receipt** that is graph-ready and links to the exact artifact versions it certifies. Receipts should be persisted canonically in Context Vault (`DecisionReceipt`); file mirrors under `runs/<run_id>/receipts/` are allowed. If a receipt record is unavailable for any reason, represent the receipt as a **DT entry** with an `event_type` field matching the commit point.
+
+### Runner gates (stake-based)
+
+Runner enforcement is stake-based. Each stake level defines:
+
+- allowed actions (read/retrieve/write/bank)
+- approval requirement (who must approve)
+- verification bundle (what checks must run and be recorded)
+
+Example tiers (to be finalized): `low` / `med` / `high`.
+
+### Graph posture (v1 decision)
+
+- **Default**: graph is **derived later** from receipts + RL/DT (export to GraphJSON/CSV on demand)
+- **Optional upgrade**: graph deltas are **required at each commit point** and become part of the banking gate
+
+### Banking gate (structural + quality)
+
+Structural requirements remain enforced (HS Approved + CH Approved + RL + DT + approver). In addition, quality checks should be added over time:
+
+- confidence recorded for the decision
+- decision-driving claims covered by evidence (claim → fact → source)
+- contradictions resolved or explicitly waived
+- outcome + conditions + approvals captured
+
+### Acceptance run (living spec)
+
+`RUN-INFRA-2026-001` (and future sample runs) should demonstrate the full spine: HS/PM/CH/OUTPUT/RL/DT with schema versions, receipts at each commit point, runner gates enforced, and banking validations passing.

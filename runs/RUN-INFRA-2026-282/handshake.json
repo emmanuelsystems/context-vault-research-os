@@ -1,0 +1,19 @@
+{
+  "run_id": "RUN-INFRA-2026-282",
+  "primary_question": "Should we adopt?",
+  "decision_type": "choose",
+  "timeframe": "Q2",
+  "scope": "Internal research only",
+  "canonical_inputs": [],
+  "assumptions": [
+    "No breaking API changes"
+  ],
+  "success_criteria": [
+    "Criteria 1",
+    "Criteria 2"
+  ],
+  "candidate_paths": [
+    "Path A",
+    "Path B"
+  ]
+}

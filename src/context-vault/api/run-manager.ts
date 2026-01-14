@@ -27,7 +27,7 @@ export const RunManager = {
     getRun: async (runId: string) => {
         return prisma.run.findUnique({
             where: { id: runId },
-            include: { artifacts: true },
+            include: { artifacts: true, receipts: true },
         });
     },
 
@@ -38,6 +38,7 @@ export const RunManager = {
                 ...(domain ? { domain } : {}),
             },
             orderBy: { created_at: 'desc' },
+            include: { receipts: true },
         });
     },
 

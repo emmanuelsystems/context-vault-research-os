@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { ReceiptManager } from '../../../context-vault/api/receipt-manager.js';
 import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 
 const handshake = new Command('handshake');
@@ -41,7 +42,20 @@ handshake.command('create')
                 // PRD says Step 2 is explicit approval. Let's start with Draft.
             });
             FileStorage.saveArtifact(run.id, 'HS', payload);
-            FileStorage.saveReceipt(run.id, 'hs_locked', {
+
+            const receipt = await ReceiptManager.upsertReceipt({
+                run_id: run.id,
+                commit_point: 'HS_LOCKED',
+                summary: 'Handshake locked',
+                inputs: [{ type: 'artifact_id', id: artifact.id }],
+                constraints: [`decision_type=${options.type}`],
+                decision_makers: ['SafetyLeadUser'],
+                outcome: `primary_question locked; decision_type=${options.type}`,
+                approvals: [{ name: 'SafetyLeadUser', role: 'Approver', approved_at: new Date().toISOString() }],
+            });
+
+            FileStorage.saveReceipt(run.id, 'HS_LOCKED', {
+                receipt_id: receipt.id,
                 artifact_id: artifact.id,
                 decision_type: options.type,
                 locked_at: new Date().toISOString()

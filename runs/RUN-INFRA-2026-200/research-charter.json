@@ -1,0 +1,27 @@
+{
+  "run_id": "RUN-INFRA-2026-200",
+  "chosen_paths": [
+    "Path using Pilot Orchestrator"
+  ],
+  "engine_subagent_mapping": [
+    {
+      "engine": "engine-pilot-orchestrator",
+      "subagent": "subagent-citation"
+    }
+  ],
+  "asset_prompt_stub": "Generated prompt stub...",
+  "intermediate_artifacts": [
+    {
+      "expected_type": "OUTPUT",
+      "container": "container-pilot-brief",
+      "acceptance": "Must fill all slots"
+    }
+  ],
+  "runtime_settings": {
+    "token_budget": 100000,
+    "max_rounds": 5
+  },
+  "approvals": [
+    "Safety Lead"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "decision_id": "DT-RUN-INFRA-2026-883-1768378004770",
+  "run_id": "RUN-INFRA-2026-883",
+  "event_type": "FINAL_DECISION_COMMITTED",
+  "decision_statement": "Decision made: final_decision",
+  "options_considered": [
+    "Yes",
+    "No",
+    "Maybe"
+  ],
+  "chosen_option": "Adopt internal-only",
+  "inputs": [],
+  "approved_by": [
+    "SafetyLeadUser"
+  ],
+  "timestamp": "2026-01-14T08:06:44.770Z"
+}

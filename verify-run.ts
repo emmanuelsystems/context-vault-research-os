@@ -57,6 +57,21 @@ async function main() {
     // 7. Decision
     run(`decision create --run ${runId} --type final_decision --choice "Adopt internal-only"`);
 
+    // 7.5 Receipts (commit points)
+    const receipts = await prisma.decisionReceipt.findMany({ where: { run_id: runId } });
+    const requiredCommitPoints = [
+        'HS_LOCKED',
+        'PATH_SELECTED',
+        'CHARTER_APPROVED',
+        'FINAL_DECISION_COMMITTED'
+    ];
+
+    const missingReceipts = requiredCommitPoints.filter(cp => !receipts.some(r => r.commit_point === cp));
+    if (missingReceipts.length) {
+        console.error(`Missing DecisionReceipt(s): ${missingReceipts.join(', ')}`);
+        process.exit(1);
+    }
+
     // 8. Bank
     run(`bank run --run ${runId}`);
 

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { ReceiptManager } from '../../../context-vault/api/receipt-manager.js';
 import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 import { Catalog } from '../../catalog.js';
 
@@ -72,7 +73,19 @@ charter.command('create')
                 status: 'Approved' // Auto-approve for speedrun flow, normally Draft
             });
             FileStorage.saveArtifact(run.id, 'CH', payload);
-            FileStorage.saveReceipt(run.id, 'charter_approved', {
+
+            const receipt = await ReceiptManager.upsertReceipt({
+                run_id: run.id,
+                commit_point: 'CHARTER_APPROVED',
+                summary: 'Charter approved',
+                inputs: [{ type: 'artifact_id', id: pm.id }, { type: 'artifact_id', id: artifact.id }],
+                decision_makers: ['SafetyLeadUser'],
+                outcome: `mapped_engines=${mapping.length}`,
+                approvals: [{ name: 'SafetyLeadUser', role: 'Approver', approved_at: new Date().toISOString() }],
+            });
+
+            FileStorage.saveReceipt(run.id, 'CHARTER_APPROVED', {
+                receipt_id: receipt.id,
                 artifact_id: artifact.id,
                 mapped_engines: mapping.length,
                 approved_at: new Date().toISOString()

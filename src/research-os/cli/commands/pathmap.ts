@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { RunManager } from '../../../context-vault/api/run-manager.js';
 import { ArtifactManager } from '../../../context-vault/api/artifact-manager.js';
+import { ReceiptManager } from '../../../context-vault/api/receipt-manager.js';
 import { FileStorage } from '../../../context-vault/storage/file-storage.js';
 import { Catalog } from '../../catalog.js';
 
@@ -72,7 +73,22 @@ pathmap.command('create')
                 status: 'Draft'
             });
             FileStorage.saveArtifact(run.id, 'PM', payload);
-            FileStorage.saveReceipt(run.id, 'path_selected', {
+
+            const receipt = await ReceiptManager.upsertReceipt({
+                run_id: run.id,
+                commit_point: 'PATH_SELECTED',
+                summary: 'Path selected (v1: selection implied by pathmap creation)',
+                inputs: [
+                    { type: 'artifact_id', id: handshake.id },
+                    { type: 'artifact_id', id: artifact.id }
+                ],
+                decision_makers: ['ResearchOS'],
+                outcome: `proposed_paths=${rows.length}`,
+                actions: ['generated_pathmap'],
+            });
+
+            FileStorage.saveReceipt(run.id, 'PATH_SELECTED', {
+                receipt_id: receipt.id,
                 artifact_id: artifact.id,
                 selected_paths: rows.length,
                 created_at: new Date().toISOString()
