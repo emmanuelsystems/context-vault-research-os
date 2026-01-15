@@ -1,11 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { PrismaNeon } from '@prisma/adapter-neon';
-import ws from 'ws';
 
 const connectionString = (process.env.DATABASE_URL || "");
 // Accept common Postgres prefixes; Neon typically uses postgres:// or postgresql://
-const isNeon =
+const isPostgres =
     connectionString.startsWith("postgres://") ||
     connectionString.startsWith("postgresql://") ||
     connectionString.startsWith("neondb://");
@@ -13,14 +10,9 @@ const isNeon =
 let prisma: PrismaClient;
 
 try {
-    if (isNeon) {
-        // Only configure WS if we are actually using Neon
-        neonConfig.webSocketConstructor = ws;
-
-        const pool = new Pool({ connectionString });
-        const adapter = new PrismaNeon(pool as any);
-        prisma = new PrismaClient({ adapter });
-        console.log("Context Vault: Connected to Neon (Serverless)");
+    if (isPostgres) {
+        prisma = new PrismaClient();
+        console.log("Context Vault: Connected to Postgres (DATABASE_URL provided)");
     } else {
         if (process.env.NODE_ENV === 'production') {
             console.error("Context Vault Critical: DATABASE_URL is not set or not a postgres URL.");
