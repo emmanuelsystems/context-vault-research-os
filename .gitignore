@@ -5,3 +5,5 @@ dist
 *.db-journal
 test-results
 coverage
+.vercel
+.env*.local
