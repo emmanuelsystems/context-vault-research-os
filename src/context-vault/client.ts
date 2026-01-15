@@ -4,7 +4,11 @@ import { PrismaNeon } from '@prisma/adapter-neon';
 import ws from 'ws';
 
 const connectionString = (process.env.DATABASE_URL || "");
-const isNeon = connectionString.startsWith("postgres://") || connectionString.startsWith("neondb://");
+// Accept common Postgres prefixes; Neon typically uses postgres:// or postgresql://
+const isNeon =
+    connectionString.startsWith("postgres://") ||
+    connectionString.startsWith("postgresql://") ||
+    connectionString.startsWith("neondb://");
 
 let prisma: PrismaClient;
 
