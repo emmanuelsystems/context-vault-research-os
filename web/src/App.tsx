@@ -1,134 +1,286 @@
-import { useState, useEffect } from 'react';
-import { api } from './api';
-import type { Run, RunDetail, DecisionReceipt } from './api';
-import { Activity, GitBranch, Shield, ChevronRight, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react'
+import { api } from './api'
+import type { Run, RunDetail, DecisionReceipt } from './api'
+import {
+  Activity,
+  GitBranch,
+  Shield,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  Search,
+  RefreshCcw,
+} from 'lucide-react'
 
 
 function App() {
-  const [view, setView] = useState<'list' | 'detail'>('list');
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
 
-  const navigateToRun = (id: string) => {
-    setSelectedRunId(id);
-    setView('detail');
-  };
+  const [runs, setRuns] = useState<Run[]>([])
+  const [runsLoading, setRunsLoading] = useState(true)
+  const [runsError, setRunsError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
-  const traverseBack = () => {
-    setView('list');
-    setSelectedRunId(null);
-  };
+  const refreshRuns = async () => {
+    setRunsError(null)
+    setRunsLoading(true)
+    try {
+      const list = await api.getRuns()
+      setRuns(list)
+      if (!selectedRunId && list.length) setSelectedRunId(list[0].id)
+      if (selectedRunId && !list.some((r) => r.id === selectedRunId)) {
+        setSelectedRunId(list[0]?.id || null)
+      }
+    } catch (e: any) {
+      setRunsError(e?.message || 'Failed to fetch runs')
+    } finally {
+      setRunsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refreshRuns()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const filteredRuns = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return runs
+    return runs.filter((r) => {
+      return (
+        r.id.toLowerCase().includes(q) ||
+        r.title.toLowerCase().includes(q) ||
+        r.domain.toLowerCase().includes(q) ||
+        r.primary_question.toLowerCase().includes(q)
+      )
+    })
+  }, [runs, query])
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
-      <header className="border-b border-border p-4 bg-card/50 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={traverseBack}>
-            <Shield className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold tracking-tight">Context Vault <span className="text-muted-foreground font-normal">Research OS</span></h1>
-          </div>
-          <div className="text-xs text-muted-foreground font-mono">
-            {view === 'list' ? 'DASHBOARD' : `RUN: ${selectedRunId}`}
-          </div>
-        </div>
-      </header>
+      <div className="h-screen flex overflow-hidden">
+        <Sidebar
+          runs={filteredRuns}
+          loading={runsLoading}
+          error={runsError}
+          query={query}
+          onQueryChange={setQuery}
+          selectedRunId={selectedRunId}
+          onSelectRun={setSelectedRunId}
+          onRefresh={refreshRuns}
+          totalCount={runs.length}
+        />
 
-      <main className="max-w-5xl mx-auto p-6">
-        {view === 'list' ? (
-          <RunList onSelect={navigateToRun} />
-        ) : (
-          selectedRunId && <RunView runId={selectedRunId} onBack={traverseBack} />
-        )}
-      </main>
+        <main className="flex-1 overflow-y-auto">
+          <header className="border-b border-border p-4 bg-card/50 backdrop-blur sticky top-0 z-10">
+            <div className="max-w-5xl mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield className="w-6 h-6 text-primary" />
+                <h1 className="text-xl font-bold tracking-tight">
+                  Context Vault{' '}
+                  <span className="text-muted-foreground font-normal">Research OS</span>
+                </h1>
+              </div>
+              <div className="text-xs text-muted-foreground font-mono">
+                {selectedRunId ? `RUN: ${selectedRunId}` : 'DASHBOARD'}
+              </div>
+            </div>
+          </header>
+
+          <div className="max-w-5xl mx-auto p-6">
+            {selectedRunId ? (
+              <RunView runId={selectedRunId} />
+            ) : (
+              <EmptyState />
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
 
-function RunList({ onSelect }: { onSelect: (id: string) => void }) {
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.getRuns().then(setRuns).finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div className="p-10 text-center animate-pulse text-muted-foreground">Loading specificities...</div>;
-
+function Sidebar({
+  runs,
+  loading,
+  error,
+  query,
+  onQueryChange,
+  selectedRunId,
+  onSelectRun,
+  onRefresh,
+  totalCount,
+}: {
+  runs: Run[]
+  loading: boolean
+  error: string | null
+  query: string
+  onQueryChange: (v: string) => void
+  selectedRunId: string | null
+  onSelectRun: (id: string) => void
+  onRefresh: () => void
+  totalCount: number
+}) {
   const commitPoints: Array<{ id: DecisionReceipt['commit_point']; label: string }> = [
     { id: 'HS_LOCKED', label: 'HS' },
     { id: 'PATH_SELECTED', label: 'PM' },
     { id: 'CHARTER_APPROVED', label: 'CH' },
     { id: 'FINAL_DECISION_COMMITTED', label: 'FD' },
-  ];
+  ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Active Runs</h2>
-        <div className="text-sm text-muted-foreground">{runs.length} active</div>
-      </div>
-
-      <div className="grid gap-4">
-        {runs.map(run => (
-          <div
-            key={run.id}
-            onClick={() => onSelect(run.id)}
-            className="group relative p-6 bg-card border border-border rounded-xl hover:border-primary/50 cursor-pointer transition-all shadow-sm hover:shadow-md"
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs font-medium uppercase tracking-wider">{run.domain}</span>
-                  {run.stake_level && (
-                    <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] uppercase tracking-wide border border-border/60">
-                      {run.stake_level}
-                    </span>
-                  )}
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${run.status === 'Banked' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                    'bg-blue-500/10 text-blue-500 border-blue-500/20'
-                    }`}>{run.status}</span>
-                </div>
-                <h3 className="text-lg font-semibold group-hover:text-primary transition-colors">{run.title}</h3>
+    <aside className="w-[340px] shrink-0 border-r border-border bg-card/30">
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                Runs
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+              <div className="text-lg font-semibold">Dashboard</div>
             </div>
-            <p className="text-muted-foreground text-sm line-clamp-2">{run.primary_question}</p>
-            <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground gap-2 flex-wrap">
-              <span className="font-mono">{run.id}</span>
-              <div className="flex items-center gap-2">
-                {commitPoints.map(cp => {
-                  const present = (run.receipts || []).some(r => r.commit_point === cp.id);
-                  return (
-                    <span key={cp.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wide ${present ? 'border-green-500/30 bg-green-500/10 text-green-600' : 'border-border bg-muted text-muted-foreground'}`}>
-                      {present ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
-                      {cp.label}
-                    </span>
-                  );
-                })}
-              </div>
-              <span>{new Date(run.created_at).toLocaleDateString()}</span>
+            <button
+              onClick={onRefresh}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted/40 text-sm"
+            >
+              <RefreshCcw className="w-4 h-4" />
+              Refresh
+            </button>
+          </div>
+
+          <div className="mt-3 relative">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              placeholder="Search runs…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+
+          <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
+            <span>{totalCount} total</span>
+            <span>{runs.length} shown</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="p-6 text-sm text-muted-foreground animate-pulse">
+            Loading runs…
+          </div>
+        ) : error ? (
+          <div className="p-6 text-sm text-destructive">{error}</div>
+        ) : runs.length === 0 ? (
+          <div className="p-6">
+            <div className="text-center py-16 bg-muted/20 rounded-xl border border-dashed border-border">
+              <Activity className="w-10 h-10 mx-auto mb-4 text-muted-foreground/50" />
+              <h3 className="text-lg font-medium">No Runs Found</h3>
+              <p className="text-muted-foreground text-sm">
+                Create a run via CLI/MCP to see it here.
+              </p>
             </div>
           </div>
-        ))}
+        ) : (
+          <div className="p-2 space-y-1">
+            {runs.map((run) => {
+              const active = run.id === selectedRunId
+              return (
+                <button
+                  key={run.id}
+                  onClick={() => onSelectRun(run.id)}
+                  className={`w-full text-left px-3 py-3 rounded-xl border transition-colors ${
+                    active
+                      ? 'border-primary/40 bg-primary/5'
+                      : 'border-transparent hover:border-border hover:bg-muted/20'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-medium uppercase tracking-wider">
+                          {run.domain}
+                        </span>
+                        {run.stake_level && (
+                          <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] uppercase tracking-wide border border-border/60">
+                            {run.stake_level}
+                          </span>
+                        )}
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                            run.status === 'Banked'
+                              ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                              : 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                          }`}
+                        >
+                          {run.status}
+                        </span>
+                      </div>
+                      <div className="font-semibold text-sm truncate">{run.title}</div>
+                      <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                        {run.primary_question}
+                      </div>
+                    </div>
+                  </div>
 
-        {runs.length === 0 && (
-          <div className="text-center py-20 bg-muted/20 rounded-xl border border-dashed border-border">
-            <Activity className="w-10 h-10 mx-auto mb-4 text-muted-foreground/50" />
-            <h3 className="text-lg font-medium">No Runs Found</h3>
-            <p className="text-muted-foreground">Initialize a run via MCP to see it here.</p>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span className="font-mono truncate">{run.id}</span>
+                    <div className="flex items-center gap-1">
+                      {commitPoints.map((cp) => {
+                        const present = (run.receipts || []).some(
+                          (r) => r.commit_point === cp.id
+                        )
+                        return (
+                          <span
+                            key={cp.id}
+                            title={cp.id}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wide ${
+                              present
+                                ? 'border-green-500/30 bg-green-500/10 text-green-600'
+                                : 'border-border bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {present ? (
+                              <CheckCircle2 className="w-3 h-3" />
+                            ) : (
+                              <Circle className="w-3 h-3" />
+                            )}
+                            {cp.label}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 }
 
-function RunView({ runId, onBack }: { runId: string, onBack: () => void }) {
-  const [run, setRun] = useState<RunDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+function EmptyState() {
+  return (
+    <div className="text-center py-24 bg-muted/20 rounded-xl border border-dashed border-border">
+      <Shield className="w-10 h-10 mx-auto mb-4 text-muted-foreground/50" />
+      <h3 className="text-lg font-medium">Select a run</h3>
+      <p className="text-muted-foreground text-sm">
+        Choose a run from the left sidebar to preview artifacts and receipts.
+      </p>
+    </div>
+  )
+}
+
+function RunView({ runId }: { runId: string }) {
+  const [run, setRun] = useState<RunDetail | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.getRun(runId).then(setRun).finally(() => setLoading(false));
-  }, [runId]);
+    setLoading(true)
+    api.getRun(runId).then(setRun).finally(() => setLoading(false))
+  }, [runId])
 
   if (loading) return <div className="p-10 text-center animate-pulse text-muted-foreground">Retrieving context...</div>;
   if (!run) return <div className="p-10 text-center text-destructive">Run not found.</div>;
@@ -144,9 +296,6 @@ function RunView({ runId, onBack }: { runId: string, onBack: () => void }) {
     <div className="space-y-8 animate-in fade-in zoom-in-95 duration-300">
       {/* Header */}
       <div>
-        <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground mb-4 flex items-center gap-1">
-          &larr; Back to Dashboard
-        </button>
         <div className="flex items-center gap-3 mb-2">
           <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold font-mono tracking-widest">{run.domain.toUpperCase()}</span>
           <h1 className="text-3xl font-bold">{run.title}</h1>
