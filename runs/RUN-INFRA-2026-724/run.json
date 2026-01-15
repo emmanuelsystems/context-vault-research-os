@@ -1,0 +1,10 @@
+{
+  "run_id": "RUN-INFRA-2026-724",
+  "title": "Adopt Provider X",
+  "primary_question": "Should we adopt?",
+  "domain": "infra",
+  "owner_user_id": "DefaultUser",
+  "stake_level": "medium",
+  "status": "draft",
+  "created_at": "2026-01-15T07:06:55.190Z"
+}

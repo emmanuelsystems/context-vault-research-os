@@ -18,6 +18,8 @@ import { z } from "zod";
 import { RunManager } from "../context-vault/api/run-manager.js";
 import { ArtifactManager } from "../context-vault/api/artifact-manager.js";
 import { FileRunManager } from "../context-vault/storage/file-run-manager.js";
+import { ContextManager } from "../context-vault/api/context-manager.js";
+import { prisma } from "../context-vault/client.js";
 import { Catalog } from "../research-os/catalog.js";
 
 // --- Tools ---
@@ -279,7 +281,18 @@ app.get("/api/runs/:id", async (req, res) => {
         const run = await RunManager.getRun(req.params.id);
         if (run) {
             const artifacts = await ArtifactManager.listArtifacts(req.params.id);
-            res.json({ ...run, artifacts, receipts: (run as any).receipts || [] });
+            const context_links = await prisma.runContextLink.findMany({
+                where: { run_id: req.params.id },
+                include: { context_item: true },
+                orderBy: { created_at: 'desc' }
+            }).catch(() => [] as any[]);
+
+            res.json({
+                ...run,
+                artifacts,
+                receipts: (run as any).receipts || [],
+                context_items: context_links.map(l => l.context_item)
+            });
             return;
         }
 
@@ -300,6 +313,75 @@ app.get("/api/runs/:id", async (req, res) => {
         } catch {
             res.status(500).json({ error: "Failed to get run" });
         }
+    }
+});
+
+// --- Context Memory (Phase 1) ---
+
+app.post("/api/context-items", async (req, res) => {
+    try {
+        const body = req.body || {};
+        const item = await ContextManager.createContextItem({
+            layer: body.layer || 'RAW',
+            source_type: body.source_type,
+            title: body.title,
+            project: body.project,
+            people: Array.isArray(body.people) ? body.people : undefined,
+            topics: Array.isArray(body.topics) ? body.topics : undefined,
+            occurred_at: body.occurred_at,
+            content_text: body.content_text,
+            content_ref: body.content_ref,
+            payload: body.payload,
+            created_by: body.created_by,
+        });
+        res.json(item);
+    } catch (e: any) {
+        res.status(500).json({ error: "Failed to create context item", message: e?.message });
+    }
+});
+
+app.get("/api/context-items", async (req, res) => {
+    try {
+        const items = await ContextManager.listContextItems({
+            q: req.query.q?.toString(),
+            layer: req.query.layer?.toString(),
+            project: req.query.project?.toString(),
+            from: req.query.from?.toString(),
+            to: req.query.to?.toString(),
+        });
+        res.json(items);
+    } catch (e: any) {
+        res.status(500).json({ error: "Failed to list context items", message: e?.message });
+    }
+});
+
+app.get("/api/context-items/:id", async (req, res) => {
+    try {
+        const item = await ContextManager.getContextItem(req.params.id);
+        if (!item) {
+            res.status(404).json({ error: "Context item not found" });
+            return;
+        }
+        res.json(item);
+    } catch (e: any) {
+        res.status(500).json({ error: "Failed to get context item", message: e?.message });
+    }
+});
+
+app.post("/api/runs/:id/context-links", async (req, res) => {
+    try {
+        const context_item_id = req.body?.context_item_id;
+        if (!context_item_id) {
+            res.status(400).json({ error: "context_item_id is required" });
+            return;
+        }
+        const link = await ContextManager.linkContextToRun({
+            run_id: req.params.id,
+            context_item_id,
+        });
+        res.json(link);
+    } catch (e: any) {
+        res.status(500).json({ error: "Failed to link context item", message: e?.message });
     }
 });
 

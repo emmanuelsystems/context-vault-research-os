@@ -25,6 +25,7 @@ model Run {
   updated_at       DateTime          @updatedAt
   artifacts        RunArtifact[]
   receipts         DecisionReceipt[]
+  context_links    RunContextLink[]
 
   @@index([status])
   @@index([domain])
@@ -76,4 +77,46 @@ model DecisionReceipt {
   @@unique([run_id, commit_point])
   @@index([run_id])
   @@index([commit_point])
+}
+
+// Context Vault Memory Items
+// Layers: RAW | SENSEMAKING | STRUCTURED | APPLICATION
+model ContextItem {
+  id           String   @id @default(uuid())
+  layer        String // RAW | SENSEMAKING | STRUCTURED | APPLICATION
+  source_type  String? // voice | transcript | note | research_dump | interview | other
+  title        String?
+  project      String?
+  people       String? // JSON array of strings
+  topics       String? // JSON array of strings
+  occurred_at  DateTime?
+
+  // Raw content may be stored inline for MVP; later we can move to content_ref
+  content_text String?
+  content_ref  String? // URL or blob id for external content
+  payload      String? // JSON metadata (extensible, additive)
+
+  created_by   String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  run_links    RunContextLink[]
+
+  @@index([layer])
+  @@index([project])
+  @@index([occurred_at])
+}
+
+// Many-to-many between Runs and ContextItems (memory inputs reused across runs)
+model RunContextLink {
+  id              String      @id @default(uuid())
+  run_id          String
+  run             Run         @relation(fields: [run_id], references: [id])
+  context_item_id String
+  context_item    ContextItem @relation(fields: [context_item_id], references: [id])
+  created_at      DateTime    @default(now())
+
+  @@unique([run_id, context_item_id])
+  @@index([run_id])
+  @@index([context_item_id])
 }

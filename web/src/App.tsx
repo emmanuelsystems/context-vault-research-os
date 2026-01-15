@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { api } from './api'
-import type { Run, RunDetail, DecisionReceipt } from './api'
+import type { Run, RunDetail, DecisionReceipt, ContextItem } from './api'
 import {
   Activity,
   GitBranch,
@@ -14,12 +14,19 @@ import {
 
 
 function App() {
+  const [view, setView] = useState<'runs' | 'memory'>('runs')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
 
   const [runs, setRuns] = useState<Run[]>([])
   const [runsLoading, setRunsLoading] = useState(true)
   const [runsError, setRunsError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+
+  const [contextItems, setContextItems] = useState<ContextItem[]>([])
+  const [contextLoading, setContextLoading] = useState(false)
+  const [contextError, setContextError] = useState<string | null>(null)
+  const [contextQuery, setContextQuery] = useState('')
 
   const refreshRuns = async () => {
     setRunsError(null)
@@ -38,10 +45,37 @@ function App() {
     }
   }
 
+  const refreshContextItems = async () => {
+    setContextError(null)
+    setContextLoading(true)
+    try {
+      const list = await api.listContextItems({
+        q: contextQuery,
+        layer: 'RAW',
+      })
+      setContextItems(list)
+      if (!selectedContextId && list.length) setSelectedContextId(list[0].id)
+      if (selectedContextId && !list.some((c) => c.id === selectedContextId)) {
+        setSelectedContextId(list[0]?.id || null)
+      }
+    } catch (e: any) {
+      setContextError(e?.message || 'Failed to fetch context items')
+    } finally {
+      setContextLoading(false)
+    }
+  }
+
   useEffect(() => {
     refreshRuns()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (view !== 'memory') return
+    if (contextItems.length) return
+    refreshContextItems()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view])
 
   const filteredRuns = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -56,19 +90,49 @@ function App() {
     })
   }, [runs, query])
 
+  const filteredContextItems = useMemo(() => {
+    const q = contextQuery.trim().toLowerCase()
+    if (!q) return contextItems
+    return contextItems.filter((c) => {
+      return (
+        (c.id || '').toLowerCase().includes(q) ||
+        (c.title || '').toLowerCase().includes(q) ||
+        (c.project || '').toLowerCase().includes(q) ||
+        (c.content_text || '').toLowerCase().includes(q)
+      )
+    })
+  }, [contextItems, contextQuery])
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
       <div className="h-screen flex overflow-hidden">
         <Sidebar
+          view={view}
+          onChangeView={setView}
           runs={filteredRuns}
-          loading={runsLoading}
-          error={runsError}
-          query={query}
-          onQueryChange={setQuery}
+          runsLoading={runsLoading}
+          runsError={runsError}
+          runQuery={query}
+          onRunQueryChange={setQuery}
           selectedRunId={selectedRunId}
-          onSelectRun={setSelectedRunId}
-          onRefresh={refreshRuns}
-          totalCount={runs.length}
+          onSelectRun={(id) => {
+            setSelectedRunId(id)
+            setView('runs')
+          }}
+          onRefreshRuns={refreshRuns}
+          totalRunCount={runs.length}
+          contextItems={filteredContextItems}
+          contextLoading={contextLoading}
+          contextError={contextError}
+          contextQuery={contextQuery}
+          onContextQueryChange={setContextQuery}
+          selectedContextId={selectedContextId}
+          onSelectContextItem={(id) => {
+            setSelectedContextId(id)
+            setView('memory')
+          }}
+          onRefreshContextItems={refreshContextItems}
+          totalContextCount={contextItems.length}
         />
 
         <main className="flex-1 overflow-y-auto">
@@ -82,16 +146,37 @@ function App() {
                 </h1>
               </div>
               <div className="text-xs text-muted-foreground font-mono">
-                {selectedRunId ? `RUN: ${selectedRunId}` : 'DASHBOARD'}
+                {view === 'runs'
+                  ? selectedRunId
+                    ? `RUN: ${selectedRunId}`
+                    : 'RUNS'
+                  : selectedContextId
+                    ? `MEMORY: ${selectedContextId}`
+                    : 'MEMORY'}
               </div>
             </div>
           </header>
 
           <div className="max-w-5xl mx-auto p-6">
-            {selectedRunId ? (
-              <RunView runId={selectedRunId} />
+            {view === 'runs' ? (
+              selectedRunId ? (
+                <RunView runId={selectedRunId} />
+              ) : (
+                <EmptyState
+                  title="Select a run"
+                  description="Choose a run from the left sidebar to preview artifacts and receipts."
+                />
+              )
+            ) : selectedContextId ? (
+              <ContextView contextId={selectedContextId} />
             ) : (
-              <EmptyState />
+              <CaptureView
+                onCreated={async (id) => {
+                  await refreshContextItems()
+                  setSelectedContextId(id)
+                  setView('memory')
+                }}
+              />
             )}
           </div>
         </main>
@@ -101,25 +186,47 @@ function App() {
 }
 
 function Sidebar({
+  view,
+  onChangeView,
   runs,
-  loading,
-  error,
-  query,
-  onQueryChange,
+  runsLoading,
+  runsError,
+  runQuery,
+  onRunQueryChange,
   selectedRunId,
   onSelectRun,
-  onRefresh,
-  totalCount,
+  onRefreshRuns,
+  totalRunCount,
+  contextItems,
+  contextLoading,
+  contextError,
+  contextQuery,
+  onContextQueryChange,
+  selectedContextId,
+  onSelectContextItem,
+  onRefreshContextItems,
+  totalContextCount,
 }: {
+  view: 'runs' | 'memory'
+  onChangeView: (v: 'runs' | 'memory') => void
   runs: Run[]
-  loading: boolean
-  error: string | null
-  query: string
-  onQueryChange: (v: string) => void
+  runsLoading: boolean
+  runsError: string | null
+  runQuery: string
+  onRunQueryChange: (v: string) => void
   selectedRunId: string | null
   onSelectRun: (id: string) => void
-  onRefresh: () => void
-  totalCount: number
+  onRefreshRuns: () => void
+  totalRunCount: number
+  contextItems: ContextItem[]
+  contextLoading: boolean
+  contextError: string | null
+  contextQuery: string
+  onContextQueryChange: (v: string) => void
+  selectedContextId: string | null
+  onSelectContextItem: (id: string) => void
+  onRefreshContextItems: () => void
+  totalContextCount: number
 }) {
   const commitPoints: Array<{ id: DecisionReceipt['commit_point']; label: string }> = [
     { id: 'HS_LOCKED', label: 'HS' },
@@ -127,6 +234,114 @@ function Sidebar({
     { id: 'CHARTER_APPROVED', label: 'CH' },
     { id: 'FINAL_DECISION_COMMITTED', label: 'FD' },
   ]
+
+  if (view === 'memory') {
+    return (
+      <aside className="w-[340px] shrink-0 border-r border-border bg-card/30">
+        <div className="h-full flex flex-col">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                  Memory
+                </div>
+                <div className="text-lg font-semibold">Raw Captures</div>
+              </div>
+              <button
+                onClick={onRefreshContextItems}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted/40 text-sm"
+              >
+                <RefreshCcw className="w-4 h-4" />
+                Refresh
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => onChangeView('runs')}
+                className="px-3 py-2 rounded-lg border text-sm border-border bg-background hover:bg-muted/40"
+              >
+                Runs
+              </button>
+              <button
+                onClick={() => onChangeView('memory')}
+                className="px-3 py-2 rounded-lg border text-sm border-primary/40 bg-primary/5"
+              >
+                Memory
+              </button>
+            </div>
+
+            <div className="mt-3 relative">
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                value={contextQuery}
+                onChange={(e) => onContextQueryChange(e.target.value)}
+                placeholder="Search memory..."
+                className="w-full pl-9 pr-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+
+            <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
+              <span>{totalContextCount} total</span>
+              <span>{contextItems.length} shown</span>
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {contextLoading ? (
+              <div className="p-3 space-y-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="p-3 rounded-xl border border-border bg-background animate-pulse">
+                    <div className="h-3 w-20 bg-muted rounded mb-2" />
+                    <div className="h-4 w-40 bg-muted rounded mb-2" />
+                    <div className="h-3 w-full bg-muted rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : contextError ? (
+              <div className="p-6 text-sm text-destructive">{contextError}</div>
+            ) : contextItems.length === 0 ? (
+              <div className="p-6">
+                <div className="text-center py-16 bg-muted/20 rounded-xl border border-dashed border-border">
+                  <Activity className="w-10 h-10 mx-auto mb-4 text-muted-foreground/50" />
+                  <h3 className="text-lg font-medium">No Memory Captures</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Use the right pane to capture a raw transcript or note.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-2 space-y-1">
+                {contextItems.map((item) => {
+                  const active = item.id === selectedContextId
+                  const title = item.title || '(untitled)'
+                  const preview = (item.content_text || '').slice(0, 120)
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onSelectContextItem(item.id)}
+                      className={`w-full text-left px-3 py-3 rounded-xl border transition-colors ${
+                        active
+                          ? 'border-primary/40 bg-primary/5'
+                          : 'border-transparent hover:border-border hover:bg-muted/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">RAW</span>
+                        <span className="text-[10px] text-muted-foreground font-mono truncate">{item.id}</span>
+                      </div>
+                      <div className="font-semibold text-sm truncate mt-1">{title}</div>
+                      <div className="text-xs text-muted-foreground line-clamp-2 mt-1">{preview || '—'}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+    )
+  }
 
   return (
     <aside className="w-[340px] shrink-0 border-r border-border bg-card/30">
@@ -140,7 +355,7 @@ function Sidebar({
               <div className="text-lg font-semibold">Dashboard</div>
             </div>
             <button
-              onClick={onRefresh}
+              onClick={onRefreshRuns}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted/40 text-sm"
             >
               <RefreshCcw className="w-4 h-4" />
@@ -148,29 +363,44 @@ function Sidebar({
             </button>
           </div>
 
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onChangeView('runs')}
+              className="px-3 py-2 rounded-lg border text-sm border-primary/40 bg-primary/5"
+            >
+              Runs
+            </button>
+            <button
+              onClick={() => onChangeView('memory')}
+              className="px-3 py-2 rounded-lg border text-sm border-border bg-background hover:bg-muted/40"
+            >
+              Memory
+            </button>
+          </div>
+
           <div className="mt-3 relative">
             <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
+              value={runQuery}
+              onChange={(e) => onRunQueryChange(e.target.value)}
               placeholder="Search runs…"
               className="w-full pl-9 pr-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
 
           <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
-            <span>{totalCount} total</span>
+            <span>{totalRunCount} total</span>
             <span>{runs.length} shown</span>
           </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
-        {loading ? (
+        {runsLoading ? (
           <div className="p-6 text-sm text-muted-foreground animate-pulse">
             Loading runs…
           </div>
-        ) : error ? (
-          <div className="p-6 text-sm text-destructive">{error}</div>
+        ) : runsError ? (
+          <div className="p-6 text-sm text-destructive">{runsError}</div>
         ) : runs.length === 0 ? (
           <div className="p-6">
             <div className="text-center py-16 bg-muted/20 rounded-xl border border-dashed border-border">
@@ -262,14 +492,202 @@ function Sidebar({
   );
 }
 
-function EmptyState() {
+function EmptyState({ title, description }: { title: string; description: string }) {
   return (
     <div className="text-center py-24 bg-muted/20 rounded-xl border border-dashed border-border">
       <Shield className="w-10 h-10 mx-auto mb-4 text-muted-foreground/50" />
-      <h3 className="text-lg font-medium">Select a run</h3>
-      <p className="text-muted-foreground text-sm">
-        Choose a run from the left sidebar to preview artifacts and receipts.
-      </p>
+      <h3 className="text-lg font-medium">{title}</h3>
+      <p className="text-muted-foreground text-sm">{description}</p>
+    </div>
+  )
+}
+
+function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
+  const [title, setTitle] = useState('')
+  const [project, setProject] = useState('')
+  const [people, setPeople] = useState('')
+  const [topics, setTopics] = useState('')
+  const [occurredAt, setOccurredAt] = useState('')
+  const [contentText, setContentText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    setError(null)
+    setSubmitting(true)
+    try {
+      const item = await api.createContextItem({
+        layer: 'RAW',
+        source_type: 'transcript',
+        title: title || undefined,
+        project: project || undefined,
+        people: people
+          ? people
+              .split(',')
+              .map((p) => p.trim())
+              .filter(Boolean)
+          : undefined,
+        topics: topics
+          ? topics
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : undefined,
+        occurred_at: occurredAt || undefined,
+        content_text: contentText || undefined,
+      })
+      onCreated(item.id)
+      setTitle('')
+      setProject('')
+      setPeople('')
+      setTopics('')
+      setOccurredAt('')
+      setContentText('')
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create capture')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">New Raw Capture</h2>
+        <p className="text-muted-foreground">
+          Store transcripts/notes as ground truth. No cleanup—add metadata only.
+        </p>
+      </div>
+
+      <div className="border border-border rounded-xl bg-card p-6 space-y-4">
+        {error && <div className="text-sm text-destructive">{error}</div>}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="text-sm space-y-1">
+            <div className="text-muted-foreground">Title</div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="e.g. Infra sync transcript"
+            />
+          </label>
+
+          <label className="text-sm space-y-1">
+            <div className="text-muted-foreground">Project</div>
+            <input
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="e.g. Slingshot"
+            />
+          </label>
+
+          <label className="text-sm space-y-1">
+            <div className="text-muted-foreground">People (comma separated)</div>
+            <input
+              value={people}
+              onChange={(e) => setPeople(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="e.g. David, Emmanuel"
+            />
+          </label>
+
+          <label className="text-sm space-y-1">
+            <div className="text-muted-foreground">Topics (comma separated)</div>
+            <input
+              value={topics}
+              onChange={(e) => setTopics(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="e.g. Context Graph, Runner policy"
+            />
+          </label>
+
+          <label className="text-sm space-y-1 md:col-span-2">
+            <div className="text-muted-foreground">Occurred at (ISO or freeform)</div>
+            <input
+              value={occurredAt}
+              onChange={(e) => setOccurredAt(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="2026-01-15T10:00:00Z"
+            />
+          </label>
+        </div>
+
+        <label className="text-sm space-y-1">
+          <div className="text-muted-foreground">Raw text</div>
+          <textarea
+            value={contentText}
+            onChange={(e) => setContentText(e.target.value)}
+            rows={10}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="Paste transcript/notes here..."
+          />
+        </label>
+
+        <div className="flex items-center justify-end">
+          <button
+            onClick={submit}
+            disabled={submitting}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-60"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Create capture
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ContextView({ contextId }: { contextId: string }) {
+  const [item, setItem] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    api.getContextItem(contextId).then(setItem).finally(() => setLoading(false))
+  }, [contextId])
+
+  if (loading) {
+    return <div className="p-10 text-center animate-pulse text-muted-foreground">Loading memory...</div>
+  }
+
+  if (!item) return <div className="p-10 text-center text-destructive">Memory item not found.</div>
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="text-xs text-muted-foreground uppercase tracking-wider">{item.layer}</div>
+        <h1 className="text-3xl font-bold">{item.title || '(untitled)'}</h1>
+        <div className="text-sm text-muted-foreground font-mono mt-1">{item.id}</div>
+      </div>
+
+      <div className="border border-border rounded-xl bg-card overflow-hidden">
+        <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold">Raw Content</h3>
+          <span className="text-xs text-muted-foreground">{item.project || '—'}</span>
+        </div>
+        <div className="p-6">
+          <pre className="whitespace-pre-wrap break-words text-sm font-mono text-muted-foreground">
+            {item.content_text || '—'}
+          </pre>
+        </div>
+      </div>
+
+      <div className="border border-border rounded-xl bg-card overflow-hidden">
+        <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold">Linked Runs</h3>
+          <span className="text-xs text-muted-foreground">{(item.run_links || []).length} links</span>
+        </div>
+        <div className="p-6 text-sm text-muted-foreground">
+          {(item.run_links || []).length === 0
+            ? 'Not linked to any run yet.'
+            : (item.run_links || []).map((l: any) => (
+                <div key={l.id} className="font-mono">{l.run?.id || l.run_id}</div>
+              ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -277,11 +695,31 @@ function EmptyState() {
 function RunView({ runId }: { runId: string }) {
   const [run, setRun] = useState<RunDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [attachContextId, setAttachContextId] = useState('')
+  const [attaching, setAttaching] = useState(false)
+  const [attachError, setAttachError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
     api.getRun(runId).then(setRun).finally(() => setLoading(false))
   }, [runId])
+
+  const attachContext = async () => {
+    const id = attachContextId.trim()
+    if (!id) return
+    setAttachError(null)
+    setAttaching(true)
+    try {
+      await api.linkContextToRun(runId, id)
+      setAttachContextId('')
+      const updated = await api.getRun(runId)
+      setRun(updated)
+    } catch (e: any) {
+      setAttachError(e?.message || 'Failed to attach context')
+    } finally {
+      setAttaching(false)
+    }
+  }
 
   if (loading) return <div className="p-10 text-center animate-pulse text-muted-foreground">Retrieving context...</div>;
   if (!run) return <div className="p-10 text-center text-destructive">Run not found.</div>;
@@ -302,6 +740,53 @@ function RunView({ runId }: { runId: string }) {
           <h1 className="text-3xl font-bold">{run.title}</h1>
         </div>
         <p className="text-lg text-muted-foreground">{run.primary_question}</p>
+      </div>
+
+      {/* Context Inputs */}
+      <div className="border border-border rounded-xl bg-card overflow-hidden">
+        <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Shield className="w-4 h-4" />
+            Context Inputs
+          </h3>
+          <span className="text-xs text-muted-foreground">{(run.context_items || []).length} linked</span>
+        </div>
+        <div className="p-6 space-y-4">
+          {(run.context_items || []).length === 0 ? (
+            <div className="text-sm text-muted-foreground">No memory inputs linked yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {(run.context_items || []).map((ci: any) => (
+                <div key={ci.id} className="p-3 rounded-lg border border-border bg-muted/20">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider">{ci.layer}</div>
+                  <div className="font-semibold text-sm">{ci.title || '(untitled)'}</div>
+                  <div className="text-xs text-muted-foreground font-mono">{ci.id}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="border-t border-border pt-4">
+            <div className="text-xs text-muted-foreground mb-2">Attach context item by ID</div>
+            {attachError && <div className="text-sm text-destructive mb-2">{attachError}</div>}
+            <div className="flex gap-2">
+              <input
+                value={attachContextId}
+                onChange={(e) => setAttachContextId(e.target.value)}
+                placeholder="context_item_id"
+                className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <button
+                onClick={attachContext}
+                disabled={attaching || !attachContextId.trim()}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted/40 disabled:opacity-60 text-sm"
+              >
+                {attaching ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Attach
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Receipts */}
