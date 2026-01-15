@@ -17,6 +17,7 @@ app.use(express.json());
 import { z } from "zod";
 import { RunManager } from "../context-vault/api/run-manager.js";
 import { ArtifactManager } from "../context-vault/api/artifact-manager.js";
+import { FileRunManager } from "../context-vault/storage/file-run-manager.js";
 import { Catalog } from "../research-os/catalog.js";
 
 // --- Tools ---
@@ -257,23 +258,48 @@ server.resource(
 app.get("/api/runs", async (req, res) => {
     try {
         const runs = await RunManager.listRuns();
+        if (runs.length === 0) {
+            const fileRuns = await FileRunManager.listRuns();
+            res.json(fileRuns);
+            return;
+        }
         res.json(runs);
     } catch (e) {
-        res.status(500).json({ error: "Failed to list runs" });
+        try {
+            const fileRuns = await FileRunManager.listRuns();
+            res.json(fileRuns);
+        } catch {
+            res.status(500).json({ error: "Failed to list runs" });
+        }
     }
 });
 
 app.get("/api/runs/:id", async (req, res) => {
     try {
         const run = await RunManager.getRun(req.params.id);
-        if (!run) {
+        if (run) {
+            const artifacts = await ArtifactManager.listArtifacts(req.params.id);
+            res.json({ ...run, artifacts, receipts: (run as any).receipts || [] });
+            return;
+        }
+
+        const fileRun = await FileRunManager.getRun(req.params.id);
+        if (!fileRun) {
             res.status(404).json({ error: "Run not found" });
             return;
         }
-        const artifacts = await ArtifactManager.listArtifacts(req.params.id);
-        res.json({ ...run, artifacts });
+        res.json(fileRun);
     } catch (e) {
-        res.status(500).json({ error: "Failed to get run" });
+        try {
+            const fileRun = await FileRunManager.getRun(req.params.id);
+            if (!fileRun) {
+                res.status(404).json({ error: "Run not found" });
+                return;
+            }
+            res.json(fileRun);
+        } catch {
+            res.status(500).json({ error: "Failed to get run" });
+        }
     }
 });
 

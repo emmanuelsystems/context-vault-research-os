@@ -2,6 +2,11 @@
     "buildCommand": "npm run build --prefix web",
     "devCommand": "npm run dev --prefix web -- --host 0.0.0.0",
     "outputDirectory": "web/dist",
+    "functions": {
+        "api/index.ts": {
+            "includeFiles": "runs/**"
+        }
+    },
     "rewrites": [
         {
             "source": "/sse",
