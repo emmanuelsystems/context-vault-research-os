@@ -131,6 +131,10 @@ function App() {
             setSelectedContextId(id)
             setView('memory')
           }}
+          onNewCapture={() => {
+            setSelectedContextId(null)
+            setView('memory')
+          }}
           onRefreshContextItems={refreshContextItems}
           totalContextCount={contextItems.length}
         />
@@ -215,6 +219,7 @@ function Sidebar({
   onContextQueryChange,
   selectedContextId,
   onSelectContextItem,
+  onNewCapture,
   onRefreshContextItems,
   totalContextCount,
 }: {
@@ -236,6 +241,7 @@ function Sidebar({
   onContextQueryChange: (v: string) => void
   selectedContextId: string | null
   onSelectContextItem: (id: string) => void
+  onNewCapture: () => void
   onRefreshContextItems: () => void
   totalContextCount: number
 }) {
@@ -282,20 +288,27 @@ function Sidebar({
               </button>
             </div>
 
-            <div className="mt-3 relative">
-              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                value={contextQuery}
-                onChange={(e) => onContextQueryChange(e.target.value)}
-                placeholder="Search memory..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
+          <div className="mt-3 relative">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={contextQuery}
+              onChange={(e) => onContextQueryChange(e.target.value)}
+              placeholder="Search memory..."
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
 
-            <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
-              <span>{totalContextCount} total</span>
-              <span>{contextItems.length} shown</span>
-            </div>
+          <button
+            onClick={onNewCapture}
+            className="mt-3 w-full px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted/40 text-sm text-left"
+          >
+            New capture
+          </button>
+
+          <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
+            <span>{totalContextCount} total</span>
+            <span>{contextItems.length} shown</span>
+          </div>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto">
