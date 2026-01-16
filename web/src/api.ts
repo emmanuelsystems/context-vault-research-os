@@ -76,6 +76,7 @@ export const api = {
         topics?: string[];
         occurred_at?: string;
         content_text?: string;
+        content_ref?: string;
     }): Promise<ContextItem> => {
         const res = await fetch(`${API_BASE}/context-items`, {
             method: 'POST',

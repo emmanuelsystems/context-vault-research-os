@@ -158,6 +158,17 @@ function App() {
           </header>
 
           <div className="max-w-5xl mx-auto p-6">
+            {view === 'runs' && (
+              <div className="text-sm text-muted-foreground mb-6">
+                Runs track the full research spine (Handshake → Path Map → Charter → Outputs → Retrieval → Decision → Bank).
+                Link memory captures here to preserve raw context alongside decisions.
+              </div>
+            )}
+            {view === 'memory' && (
+              <div className="text-sm text-muted-foreground mb-6">
+                Memory captures are raw signals (notes, transcripts, files, links). Store them with minimal metadata and reuse them across runs.
+              </div>
+            )}
             {view === 'runs' ? (
               selectedRunId ? (
                 <RunView runId={selectedRunId} />
@@ -508,6 +519,7 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
   const [people, setPeople] = useState('')
   const [topics, setTopics] = useState('')
   const [occurredAt, setOccurredAt] = useState('')
+  const [contentRef, setContentRef] = useState('')
   const [contentText, setContentText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -535,6 +547,7 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
           : undefined,
         occurred_at: occurredAt || undefined,
         content_text: contentText || undefined,
+        content_ref: contentRef || undefined,
       })
       onCreated(item.id)
       setTitle('')
@@ -542,6 +555,7 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
       setPeople('')
       setTopics('')
       setOccurredAt('')
+      setContentRef('')
       setContentText('')
     } catch (e: any) {
       setError(e?.message || 'Failed to create capture')
@@ -603,24 +617,34 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
             />
           </label>
 
-          <label className="text-sm space-y-1 md:col-span-2">
-            <div className="text-muted-foreground">Occurred at (ISO or freeform)</div>
-            <input
-              value={occurredAt}
-              onChange={(e) => setOccurredAt(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="2026-01-15T10:00:00Z"
-            />
-          </label>
-        </div>
+        <label className="text-sm space-y-1 md:col-span-2">
+          <div className="text-muted-foreground">Occurred at (ISO or freeform)</div>
+          <input
+            value={occurredAt}
+            onChange={(e) => setOccurredAt(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="2026-01-15T10:00:00Z"
+          />
+        </label>
 
-        <label className="text-sm space-y-1">
-          <div className="text-muted-foreground">Raw text</div>
-          <textarea
-            value={contentText}
-            onChange={(e) => setContentText(e.target.value)}
-            rows={10}
-            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono outline-none focus:ring-2 focus:ring-primary/30"
+        <label className="text-sm space-y-1 md:col-span-2">
+          <div className="text-muted-foreground">File or URL (optional)</div>
+          <input
+            value={contentRef}
+            onChange={(e) => setContentRef(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="https://.../your.pdf"
+          />
+        </label>
+      </div>
+
+      <label className="text-sm space-y-1">
+        <div className="text-muted-foreground">Raw text or excerpt (optional)</div>
+        <textarea
+          value={contentText}
+          onChange={(e) => setContentText(e.target.value)}
+          rows={10}
+          className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="Paste transcript/notes here..."
           />
         </label>
@@ -696,6 +720,8 @@ function RunView({ runId }: { runId: string }) {
   const [run, setRun] = useState<RunDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [attachContextId, setAttachContextId] = useState('')
+  const [attachContextPick, setAttachContextPick] = useState('')
+  const [contextOptions, setContextOptions] = useState<ContextItem[]>([])
   const [attaching, setAttaching] = useState(false)
   const [attachError, setAttachError] = useState<string | null>(null)
 
@@ -704,14 +730,21 @@ function RunView({ runId }: { runId: string }) {
     api.getRun(runId).then(setRun).finally(() => setLoading(false))
   }, [runId])
 
+  useEffect(() => {
+    api.listContextItems({ layer: 'RAW' })
+      .then(setContextOptions)
+      .catch(() => setContextOptions([]))
+  }, [])
+
   const attachContext = async () => {
-    const id = attachContextId.trim()
+    const id = (attachContextPick || attachContextId).trim()
     if (!id) return
     setAttachError(null)
     setAttaching(true)
     try {
       await api.linkContextToRun(runId, id)
       setAttachContextId('')
+      setAttachContextPick('')
       const updated = await api.getRun(runId)
       setRun(updated)
     } catch (e: any) {
@@ -769,6 +802,20 @@ function RunView({ runId }: { runId: string }) {
           <div className="border-t border-border pt-4">
             <div className="text-xs text-muted-foreground mb-2">Attach context item by ID</div>
             {attachError && <div className="text-sm text-destructive mb-2">{attachError}</div>}
+            <div className="mb-3">
+              <select
+                value={attachContextPick}
+                onChange={(e) => setAttachContextPick(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Attach from Memory...</option>
+                {contextOptions.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.title || '(untitled)'} · {opt.id}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-2">
               <input
                 value={attachContextId}
@@ -778,7 +825,7 @@ function RunView({ runId }: { runId: string }) {
               />
               <button
                 onClick={attachContext}
-                disabled={attaching || !attachContextId.trim()}
+                disabled={attaching || !(attachContextPick || attachContextId.trim())}
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted/40 disabled:opacity-60 text-sm"
               >
                 {attaching ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
