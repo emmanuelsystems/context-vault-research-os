@@ -21,6 +21,7 @@ import { FileRunManager } from "../context-vault/storage/file-run-manager.js";
 import { ContextManager } from "../context-vault/api/context-manager.js";
 import { prisma } from "../context-vault/client.js";
 import { Catalog } from "../research-os/catalog.js";
+import { put } from "@vercel/blob";
 
 // --- Tools ---
 
@@ -313,6 +314,28 @@ app.get("/api/runs/:id", async (req, res) => {
         } catch {
             res.status(500).json({ error: "Failed to get run" });
         }
+    }
+});
+
+// Raw file uploads to Vercel Blob (Memory captures)
+app.put("/api/upload", express.raw({ type: "*/*", limit: "25mb" }), async (req, res) => {
+    try {
+        const filename = (req.query.filename?.toString() || "memory-capture").replace(/[^\w.\-]+/g, "_");
+        const contentType = req.headers["content-type"]?.toString() || "application/octet-stream";
+
+        if (!Buffer.isBuffer(req.body)) {
+            res.status(400).json({ error: "Expected binary body" });
+            return;
+        }
+
+        const blob = await put(`context/${Date.now()}-${filename}`, req.body, {
+            access: "public",
+            contentType,
+        });
+
+        res.json({ url: blob.url });
+    } catch (e: any) {
+        res.status(500).json({ error: "Failed to upload", message: e?.message });
     }
 });
 

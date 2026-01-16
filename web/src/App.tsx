@@ -521,6 +521,8 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
   const [occurredAt, setOccurredAt] = useState('')
   const [contentRef, setContentRef] = useState('')
   const [contentText, setContentText] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -528,9 +530,33 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
     setError(null)
     setSubmitting(true)
     try {
+      if (!file && !contentRef.trim() && !contentText.trim()) {
+        throw new Error('Add a file, link, or raw text before saving.')
+      }
+
+      let uploadedUrl = contentRef || undefined
+      const sourceType = file ? 'file' : contentRef ? 'link' : 'transcript'
+
+      if (file) {
+        setUploading(true)
+        const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+          method: 'PUT',
+          headers: {
+            'content-type': file.type || 'application/octet-stream',
+          },
+          body: file,
+        })
+
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(payload?.message || 'Failed to upload file')
+        }
+        uploadedUrl = payload.url
+      }
+
       const item = await api.createContextItem({
         layer: 'RAW',
-        source_type: 'transcript',
+        source_type: sourceType,
         title: title || undefined,
         project: project || undefined,
         people: people
@@ -547,7 +573,7 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
           : undefined,
         occurred_at: occurredAt || undefined,
         content_text: contentText || undefined,
-        content_ref: contentRef || undefined,
+        content_ref: uploadedUrl,
       })
       onCreated(item.id)
       setTitle('')
@@ -557,10 +583,12 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
       setOccurredAt('')
       setContentRef('')
       setContentText('')
+      setFile(null)
     } catch (e: any) {
       setError(e?.message || 'Failed to create capture')
     } finally {
       setSubmitting(false)
+      setUploading(false)
     }
   }
 
@@ -628,6 +656,18 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
         </label>
 
         <label className="text-sm space-y-1 md:col-span-2">
+          <div className="text-muted-foreground">Upload file (optional)</div>
+          <input
+            type="file"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          {file && (
+            <div className="text-xs text-muted-foreground">Selected: {file.name}</div>
+          )}
+        </label>
+
+        <label className="text-sm space-y-1 md:col-span-2">
           <div className="text-muted-foreground">File or URL (optional)</div>
           <input
             value={contentRef}
@@ -652,11 +692,11 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
         <div className="flex items-center justify-end">
           <button
             onClick={submit}
-            disabled={submitting}
+            disabled={submitting || uploading}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-60"
           >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Create capture
+            {submitting || uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {uploading ? 'Uploading...' : 'Create capture'}
           </button>
         </div>
       </div>
