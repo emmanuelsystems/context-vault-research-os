@@ -457,7 +457,17 @@ app.get("/api/debug", (req, res) => {
 const transports = new Map<string, SSEServerTransport>();
 
 const handleSse = async (req: express.Request, res: express.Response) => {
-    console.log("New SSE Connection");
+    console.log("New SSE Connection", {
+        method: req.method,
+        path: req.path,
+    });
+
+    // Allow cross-origin usage for MCP clients (ChatGPT connector, etc.)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
 
     // Create a unique session ID for this connection
     const sessionId = Math.random().toString(36).substring(7);
@@ -479,21 +489,34 @@ const handleSse = async (req: express.Request, res: express.Response) => {
         transports.delete(sessionId);
     };
 
-    await server.connect(transport);
-
-    // Nudge some proxies/clients to start consuming the stream.
-    // Must happen after MCP SDK writes headers (avoid ERR_HTTP_HEADERS_SENT).
-    try {
-        res.write(':\n\n');
-    } catch {
-        // ignore
-    }
+    // Don't await: in serverless environments, awaiting a never-resolving promise can trigger timeouts.
+    void server.connect(transport).catch((e: any) => {
+        console.error('Failed to start MCP SSE transport', e);
+        try {
+            res.end();
+        } catch {
+            // ignore
+        }
+    });
 };
 
 // Prefer /api/sse for deployments behind static frontends.
 app.get("/api/sse", handleSse);
 // Backwards compat: /sse (rewritten to /api/index on Vercel).
 app.get("/sse", handleSse);
+
+app.options("/api/sse", (_req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.status(204).end();
+});
+app.options("/sse", (_req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.status(204).end();
+});
 
 // Some clients probe the MCP URL with POST; make it explicit this endpoint is GET-only.
 app.post("/api/sse", (_req, res) => res.status(405).send("MCP SSE endpoint: use GET"));
@@ -511,6 +534,13 @@ app.post("/api/message", async (req, res) => {
 
     // Delegate the message handling to the transport
     await transport.handlePostMessage(req, res);
+});
+
+app.options("/api/message", (_req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+    res.status(204).end();
 });
 
 // Global Error Handler to prevent crashes
