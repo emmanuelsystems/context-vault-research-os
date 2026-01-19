@@ -1,6 +1,7 @@
 import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 const server = new McpServer({
     name: "Context Vault + Research OS",
@@ -12,6 +13,19 @@ import cors from "cors";
 const app = express();
 app.use(cors()); // Allow all origins for MCP
 app.use(express.json());
+
+// --- MCP Transport (recommended for serverless) ---
+// Streamable HTTP is designed to work without a separate /message endpoint and avoids session stickiness issues.
+const mcpHttpTransport = new StreamableHTTPServerTransport({
+    // Stateless mode: no session persistence required (best fit for Vercel serverless).
+    sessionIdGenerator: undefined,
+});
+void server.connect(mcpHttpTransport).catch((e) => {
+    console.error("Failed to connect MCP Streamable HTTP transport", e);
+});
+app.all("/api/mcp", async (req, res) => {
+    await mcpHttpTransport.handleRequest(req, res, (req as any).body);
+});
 
 
 import { z } from "zod";
@@ -454,6 +468,9 @@ app.get("/api/debug", (req, res) => {
     });
 });
 
+// NOTE: SSE transport requires session stickiness between GET /sse and POST /api/message.
+// On Vercel serverless, these often land on different invocations, so sessions can't be found.
+// Keep this path for local/dev debugging, but prefer /api/mcp for ChatGPT connectors.
 const transports = new Map<string, SSEServerTransport>();
 
 const handleSse = async (req: express.Request, res: express.Response) => {
