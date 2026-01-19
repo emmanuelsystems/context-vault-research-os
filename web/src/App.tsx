@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 
 
+const NEW_RUN_ID = '__NEW_RUN__'
+
 function App() {
   const [view, setView] = useState<'runs' | 'memory'>('runs')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -35,7 +37,7 @@ function App() {
       const list = await api.getRuns()
       setRuns(list)
       if (!selectedRunId && list.length) setSelectedRunId(list[0].id)
-      if (selectedRunId && !list.some((r) => r.id === selectedRunId)) {
+      if (selectedRunId && selectedRunId !== NEW_RUN_ID && !list.some((r) => r.id === selectedRunId)) {
         setSelectedRunId(list[0]?.id || null)
       }
     } catch (e: any) {
@@ -119,6 +121,10 @@ function App() {
             setSelectedRunId(id)
             setView('runs')
           }}
+          onNewRun={() => {
+            setSelectedRunId(NEW_RUN_ID)
+            setView('runs')
+          }}
           onRefreshRuns={refreshRuns}
           totalRunCount={runs.length}
           contextItems={filteredContextItems}
@@ -152,7 +158,9 @@ function App() {
               <div className="text-xs text-muted-foreground font-mono">
                 {view === 'runs'
                   ? selectedRunId
-                    ? `RUN: ${selectedRunId}`
+                    ? selectedRunId === NEW_RUN_ID
+                      ? 'NEW RUN'
+                      : `RUN: ${selectedRunId}`
                     : 'RUNS'
                   : selectedContextId
                     ? `MEMORY: ${selectedContextId}`
@@ -174,7 +182,15 @@ function App() {
               </div>
             )}
             {view === 'runs' ? (
-              selectedRunId ? (
+              selectedRunId === NEW_RUN_ID ? (
+                <RunCreateView
+                  onCreated={async (id) => {
+                    await refreshRuns()
+                    setSelectedRunId(id)
+                    setView('runs')
+                  }}
+                />
+              ) : selectedRunId ? (
                 <RunView runId={selectedRunId} />
               ) : (
                 <EmptyState
@@ -210,6 +226,7 @@ function Sidebar({
   onRunQueryChange,
   selectedRunId,
   onSelectRun,
+  onNewRun,
   onRefreshRuns,
   totalRunCount,
   contextItems,
@@ -232,6 +249,7 @@ function Sidebar({
   onRunQueryChange: (v: string) => void
   selectedRunId: string | null
   onSelectRun: (id: string) => void
+  onNewRun: () => void
   onRefreshRuns: () => void
   totalRunCount: number
   contextItems: ContextItem[]
@@ -410,29 +428,36 @@ function Sidebar({
               placeholder="Search runs…"
               className="w-full pl-9 pr-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
-          </div>
+           </div>
 
-          <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
-            <span>{totalRunCount} total</span>
-            <span>{runs.length} shown</span>
-          </div>
-        </div>
+           <button
+             onClick={onNewRun}
+             className="mt-3 w-full px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted/40 text-sm text-left"
+           >
+             New run
+           </button>
+
+           <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
+             <span>{totalRunCount} total</span>
+             <span>{runs.length} shown</span>
+           </div>
+         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
         {runsLoading ? (
-          <div className="p-6 text-sm text-muted-foreground animate-pulse">
-            Loading runs…
-          </div>
+           <div className="p-6 text-sm text-muted-foreground animate-pulse">
+            Loading runs...
+           </div>
         ) : runsError ? (
           <div className="p-6 text-sm text-destructive">{runsError}</div>
         ) : runs.length === 0 ? (
           <div className="p-6">
             <div className="text-center py-16 bg-muted/20 rounded-xl border border-dashed border-border">
               <Activity className="w-10 h-10 mx-auto mb-4 text-muted-foreground/50" />
-              <h3 className="text-lg font-medium">No Runs Found</h3>
-              <p className="text-muted-foreground text-sm">
-                Create a run via CLI/MCP to see it here.
-              </p>
+               <h3 className="text-lg font-medium">No Runs Found</h3>
+               <p className="text-muted-foreground text-sm">
+                Click “New run” to create one.
+               </p>
             </div>
           </div>
         ) : (
@@ -522,6 +547,129 @@ function EmptyState({ title, description }: { title: string; description: string
       <Shield className="w-10 h-10 mx-auto mb-4 text-muted-foreground/50" />
       <h3 className="text-lg font-medium">{title}</h3>
       <p className="text-muted-foreground text-sm">{description}</p>
+    </div>
+  )
+}
+
+function RunCreateView({ onCreated }: { onCreated: (id: string) => void }) {
+  const [domain, setDomain] = useState('infra')
+  const [title, setTitle] = useState('')
+  const [question, setQuestion] = useState('')
+  const [stakeLevel, setStakeLevel] = useState<'low' | 'medium' | 'high'>('medium')
+  const [runId, setRunId] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    setError(null)
+    setSubmitting(true)
+    try {
+      const d = domain.trim()
+      const t = title.trim()
+      const q = question.trim()
+
+      if (!d || !t || !q) {
+        throw new Error('Domain, title, and primary question are required.')
+      }
+
+      const run = await api.createRun({
+        run_id: runId.trim() || undefined,
+        domain: d,
+        title: t,
+        primary_question: q,
+        stake_level: stakeLevel,
+      })
+
+      onCreated(run.id)
+      setTitle('')
+      setQuestion('')
+      setRunId('')
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create run')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">New Run</h2>
+        <p className="text-muted-foreground">
+          Runs are the workflow spine. Start here, then add Handshake → Path Map → Charter → Outputs → Retrieval → Decision Trace.
+        </p>
+      </div>
+
+      <div className="border border-border rounded-xl bg-card p-6 space-y-4">
+        {error && <div className="text-sm text-destructive">{error}</div>}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="text-sm space-y-1">
+            <div className="text-muted-foreground">Domain</div>
+            <input
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="infra"
+            />
+          </label>
+
+          <label className="text-sm space-y-1">
+            <div className="text-muted-foreground">Stake level</div>
+            <select
+              value={stakeLevel}
+              onChange={(e) => setStakeLevel(e.target.value as any)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </label>
+        </div>
+
+        <label className="text-sm space-y-1">
+          <div className="text-muted-foreground">Title</div>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="e.g. Adopt Provider X"
+          />
+        </label>
+
+        <label className="text-sm space-y-1">
+          <div className="text-muted-foreground">Primary question</div>
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            rows={4}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="e.g. Should we adopt Provider X for infra?"
+          />
+        </label>
+
+        <label className="text-sm space-y-1">
+          <div className="text-muted-foreground">Run ID (optional)</div>
+          <input
+            value={runId}
+            onChange={(e) => setRunId(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="RUN-INFRA-2026-001 (leave blank to auto-generate)"
+          />
+        </label>
+
+        <div className="flex items-center justify-end">
+          <button
+            onClick={submit}
+            disabled={submitting}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-60"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Create run
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

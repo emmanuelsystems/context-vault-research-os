@@ -277,6 +277,40 @@ app.get("/api/runs", async (req, res) => {
     }
 });
 
+app.post("/api/runs", async (req, res) => {
+    try {
+        const body = req.body || {};
+        const domain = (body.domain || '').toString().trim();
+        const title = (body.title || '').toString().trim();
+        const primary_question = (body.primary_question || body.question || '').toString().trim();
+        const rawStake = (body.stake_level || '').toString().trim().toLowerCase();
+        const stake_level = (rawStake === 'low' || rawStake === 'medium' || rawStake === 'high') ? rawStake : undefined;
+        const requestedId = (body.run_id || body.id || '').toString().trim();
+
+        if (!domain || !title || !primary_question) {
+            res.status(400).json({ error: "domain, title, and primary_question are required" });
+            return;
+        }
+
+        const year = new Date().getFullYear();
+        const suffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        const runId = requestedId || `RUN-${domain.toUpperCase()}-${year}-${suffix}`;
+
+        const run = await RunManager.createRun({
+            run_id: runId,
+            title,
+            primary_question,
+            domain,
+            stake_level,
+            owner_user_id: "WEB",
+        });
+
+        res.json(run);
+    } catch (e: any) {
+        res.status(500).json({ error: "Failed to create run", message: e?.message });
+    }
+});
+
 app.get("/api/runs/:id", async (req, res) => {
     try {
         const run = await RunManager.getRun(req.params.id);

@@ -47,6 +47,24 @@ export const api = {
         if (!res.ok) throw new Error('Failed to fetch runs');
         return res.json();
     },
+    createRun: async (data: {
+        run_id?: string;
+        domain: string;
+        title: string;
+        primary_question: string;
+        stake_level?: 'low' | 'medium' | 'high';
+    }): Promise<Run> => {
+        const res = await fetch(`${API_BASE}/runs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!res.ok) {
+            const payload = await res.json().catch(() => ({}));
+            throw new Error(payload?.message || payload?.error || 'Failed to create run');
+        }
+        return res.json();
+    },
     getRun: async (id: string): Promise<RunDetail> => {
         const res = await fetch(`${API_BASE}/runs/${id}`);
         if (!res.ok) throw new Error('Failed to fetch run');
