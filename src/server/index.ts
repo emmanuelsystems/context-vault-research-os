@@ -470,13 +470,6 @@ const handleSse = async (req: express.Request, res: express.Response) => {
     const messagePath = `/api/message?sessionId=${sessionId}`;
     const messageUrl = `${base}${messagePath}`;
 
-    // Ensure streaming starts promptly (some proxies buffer until first bytes are written).
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders?.();
-    res.write(':\n\n');
-
     const transport = new SSEServerTransport(messageUrl, res);
 
     transports.set(sessionId, transport);
@@ -487,12 +480,24 @@ const handleSse = async (req: express.Request, res: express.Response) => {
     };
 
     await server.connect(transport);
+
+    // Nudge some proxies/clients to start consuming the stream.
+    // Must happen after MCP SDK writes headers (avoid ERR_HTTP_HEADERS_SENT).
+    try {
+        res.write(':\n\n');
+    } catch {
+        // ignore
+    }
 };
 
 // Prefer /api/sse for deployments behind static frontends.
 app.get("/api/sse", handleSse);
 // Backwards compat: /sse (rewritten to /api/index on Vercel).
 app.get("/sse", handleSse);
+
+// Some clients probe the MCP URL with POST; make it explicit this endpoint is GET-only.
+app.post("/api/sse", (_req, res) => res.status(405).send("MCP SSE endpoint: use GET"));
+app.post("/sse", (_req, res) => res.status(405).send("MCP SSE endpoint: use GET"));
 
 app.post("/api/message", async (req, res) => {
     const sessionId = req.query.sessionId as string;
