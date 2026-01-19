@@ -539,6 +539,17 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const inferTitleFromFilename = (name: string) => {
+    const stripped = name.replace(/\.[^/.]+$/, '')
+    return stripped || name
+  }
+
+  const isProbablyTextFile = (f: File) => {
+    if (f.type && f.type.startsWith('text/')) return true
+    const name = f.name.toLowerCase()
+    return ['.txt', '.md', '.csv', '.log', '.json'].some((ext) => name.endsWith(ext))
+  }
+
   const submit = async () => {
     setError(null)
     setSubmitting(true)
@@ -549,6 +560,26 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
 
       let uploadedUrl = contentRef || undefined
       const sourceType = file ? 'file' : contentRef ? 'link' : 'transcript'
+
+      const effectiveTitle = title.trim() || (file ? inferTitleFromFilename(file.name) : '')
+      let excerptText = contentText || undefined
+      let payload: any | undefined
+
+      if (file) {
+        payload = {
+          filename: file.name,
+          mime_type: file.type || 'application/octet-stream',
+          size_bytes: file.size,
+        }
+
+        if (!excerptText && isProbablyTextFile(file)) {
+          const text = await file.text()
+          const limit = 30000
+          excerptText = text.length > limit ? text.slice(0, limit) : text
+          payload.preview_truncated = text.length > limit
+          payload.preview_chars = excerptText.length
+        }
+      }
 
       if (file) {
         setUploading(true)
@@ -570,7 +601,7 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
       const item = await api.createContextItem({
         layer: 'RAW',
         source_type: sourceType,
-        title: title || undefined,
+        title: effectiveTitle || undefined,
         project: project || undefined,
         people: people
           ? people
@@ -585,8 +616,9 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
               .filter(Boolean)
           : undefined,
         occurred_at: occurredAt || undefined,
-        content_text: contentText || undefined,
+        content_text: excerptText || undefined,
         content_ref: uploadedUrl,
+        payload,
       })
       onCreated(item.id)
       setTitle('')
@@ -720,17 +752,84 @@ function CaptureView({ onCreated }: { onCreated: (id: string) => void }) {
 function ContextView({ contextId }: { contextId: string }) {
   const [item, setItem] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
-    api.getContextItem(contextId).then(setItem).finally(() => setLoading(false))
+    api
+      .getContextItem(contextId)
+      .then((next) => {
+        setItem(next)
+        setPreview(null)
+        setPreviewError(null)
+      })
+      .finally(() => setLoading(false))
   }, [contextId])
+
+  useEffect(() => {
+    if (!item) return
+    if (item.content_text) return
+    if (!item.content_ref) return
+
+    let parsedPayload: any = null
+    try {
+      parsedPayload = item.payload ? JSON.parse(item.payload) : null
+    } catch {
+      parsedPayload = null
+    }
+
+    const mime = parsedPayload?.mime_type as string | undefined
+    const filename = parsedPayload?.filename as string | undefined
+    const urlName = (() => {
+      try {
+        const u = new URL(item.content_ref)
+        return u.pathname.split('/').pop() || undefined
+      } catch {
+        return undefined
+      }
+    })()
+    const looksTexty =
+      (mime && mime.startsWith('text/')) ||
+      (filename && ['.txt', '.md', '.csv', '.log', '.json'].some((ext) => filename.toLowerCase().endsWith(ext))) ||
+      (urlName && ['.txt', '.md', '.csv', '.log', '.json'].some((ext) => urlName.toLowerCase().endsWith(ext)))
+
+    if (!looksTexty) return
+
+    const controller = new AbortController()
+    setPreviewLoading(true)
+    setPreviewError(null)
+
+    fetch(item.content_ref, { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Failed to load file (${res.status})`)
+        const text = await res.text()
+        const limit = 30000
+        return text.length > limit ? text.slice(0, limit) : text
+      })
+      .then((text) => setPreview(text))
+      .catch((e: any) => {
+        if (e?.name === 'AbortError') return
+        setPreviewError(e?.message || 'Failed to load preview')
+      })
+      .finally(() => setPreviewLoading(false))
+
+    return () => controller.abort()
+  }, [item])
 
   if (loading) {
     return <div className="p-10 text-center animate-pulse text-muted-foreground">Loading memory...</div>
   }
 
   if (!item) return <div className="p-10 text-center text-destructive">Memory item not found.</div>
+
+  let parsedPayload: any = null
+  try {
+    parsedPayload = item.payload ? JSON.parse(item.payload) : null
+  } catch {
+    parsedPayload = null
+  }
 
   return (
     <div className="space-y-6">
@@ -746,8 +845,21 @@ function ContextView({ contextId }: { contextId: string }) {
           <span className="text-xs text-muted-foreground">{item.project || '—'}</span>
         </div>
         <div className="p-6">
+          {item.content_ref ? (
+            <div className="mb-4 text-sm">
+              <a
+                href={item.content_ref}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary underline underline-offset-4"
+              >
+                Open file
+              </a>
+              {parsedPayload?.filename ? <span className="text-muted-foreground">{' · '}{parsedPayload.filename}</span> : null}
+            </div>
+          ) : null}
           <pre className="whitespace-pre-wrap break-words text-sm font-mono text-muted-foreground">
-            {item.content_text || '—'}
+            {item.content_text || preview || (previewLoading ? 'Loading preview…' : previewError || '—')}
           </pre>
         </div>
       </div>
