@@ -456,7 +456,7 @@ app.get("/api/debug", (req, res) => {
 
 const transports = new Map<string, SSEServerTransport>();
 
-app.get("/sse", async (req, res) => {
+const handleSse = async (req: express.Request, res: express.Response) => {
     console.log("New SSE Connection");
 
     // Create a unique session ID for this connection
@@ -470,6 +470,13 @@ app.get("/sse", async (req, res) => {
     const messagePath = `/api/message?sessionId=${sessionId}`;
     const messageUrl = `${base}${messagePath}`;
 
+    // Ensure streaming starts promptly (some proxies buffer until first bytes are written).
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.write(':\n\n');
+
     const transport = new SSEServerTransport(messageUrl, res);
 
     transports.set(sessionId, transport);
@@ -480,7 +487,12 @@ app.get("/sse", async (req, res) => {
     };
 
     await server.connect(transport);
-});
+};
+
+// Prefer /api/sse for deployments behind static frontends.
+app.get("/api/sse", handleSse);
+// Backwards compat: /sse (rewritten to /api/index on Vercel).
+app.get("/sse", handleSse);
 
 app.post("/api/message", async (req, res) => {
     const sessionId = req.query.sessionId as string;
