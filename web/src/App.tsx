@@ -810,6 +810,76 @@ function RunView({ runId }: { runId: string }) {
   if (loading) return <div className="p-10 text-center animate-pulse text-muted-foreground">Retrieving context...</div>;
   if (!run) return <div className="p-10 text-center text-destructive">Run not found.</div>;
 
+  const safeJsonParse = (raw: any) => {
+    try {
+      const s = typeof raw === 'string' ? raw : JSON.stringify(raw)
+      return JSON.parse(s)
+    } catch {
+      return null
+    }
+  }
+
+  const latestArtifact = (type: string) => {
+    const list = (run.artifacts || []).filter((a: any) => a.artifact_type === type)
+    return list.length ? list[list.length - 1] : null
+  }
+
+  const hs = latestArtifact('HS')
+  const pm = latestArtifact('PM')
+  const ch = latestArtifact('CH')
+  const rl = latestArtifact('RL')
+  const dt = latestArtifact('DT')
+
+  const hsPayload = hs ? safeJsonParse(hs.payload) : null
+  const pmPayload = pm ? safeJsonParse(pm.payload) : null
+  const chPayload = ch ? safeJsonParse(ch.payload) : null
+  const rlPayload = rl ? safeJsonParse(rl.payload) : null
+  const dtPayload = dt ? safeJsonParse(dt.payload) : null
+
+  const pmRows = Array.isArray(pmPayload?.rows) ? pmPayload.rows : []
+  const charterMapping = Array.isArray(chPayload?.engine_subagent_mapping)
+    ? chPayload.engine_subagent_mapping
+    : []
+
+  const outputArtifacts = (run.artifacts || []).filter((a: any) => a.artifact_type === 'OUTPUT')
+  const outputPairs = outputArtifacts.reduce((acc: Record<string, number>, a: any) => {
+    const key = `${a.engine || 'unknown'} → ${a.container || 'unknown'}`
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
+
+  const receipt = (cp: DecisionReceipt['commit_point']) => (run.receipts || []).find(r => r.commit_point === cp)
+
+  const steps = [
+    {
+      id: 'HS_LOCKED' as const,
+      title: 'Handshake',
+      done: !!receipt('HS_LOCKED'),
+      detail:
+        hsPayload?.decision_type
+          ? `decision_type=${hsPayload.decision_type}`
+          : hs ? 'captured' : 'missing',
+    },
+    {
+      id: 'PATH_SELECTED' as const,
+      title: 'Path Map',
+      done: !!receipt('PATH_SELECTED'),
+      detail: pmRows.length ? `${pmRows.length} path option(s)` : pm ? 'captured' : 'missing',
+    },
+    {
+      id: 'CHARTER_APPROVED' as const,
+      title: 'Charter',
+      done: !!receipt('CHARTER_APPROVED'),
+      detail: charterMapping.length ? `${charterMapping.length} engine→subagent mapping(s)` : ch ? 'captured' : 'missing',
+    },
+    {
+      id: 'FINAL_DECISION_COMMITTED' as const,
+      title: 'Decision',
+      done: !!receipt('FINAL_DECISION_COMMITTED'),
+      detail: dtPayload?.chosen_option ? dtPayload.chosen_option : dt ? 'captured' : 'missing',
+    },
+  ]
+
   const commitPoints: Array<{ id: DecisionReceipt['commit_point']; label: string; description: string }> = [
     { id: 'HS_LOCKED', label: 'Handshake Locked', description: 'Primary question, definitions, unknowns locked' },
     { id: 'PATH_SELECTED', label: 'Path Selected', description: 'Path map options recorded' },
@@ -826,6 +896,100 @@ function RunView({ runId }: { runId: string }) {
           <h1 className="text-3xl font-bold">{run.title}</h1>
         </div>
         <p className="text-lg text-muted-foreground">{run.primary_question}</p>
+      </div>
+
+      {/* Run Steps (Engines/Containers/Subagents) */}
+      <div className="border border-border rounded-xl bg-card overflow-hidden">
+        <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold">Run Steps</h3>
+          <span className="text-xs text-muted-foreground font-mono">{run.status}</span>
+        </div>
+        <div className="p-6 space-y-5">
+          <div className="space-y-3">
+            {steps.map((s) => (
+              <div key={s.id} className="flex items-start gap-3">
+                <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${s.done ? 'bg-green-500/10 text-green-600 border-green-500/20' : 'bg-muted text-muted-foreground border-border'}`}>
+                  {s.done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="font-semibold text-sm">{s.title}</div>
+                    <div className="text-xs text-muted-foreground font-mono">{receipt(s.id)?.created_at ? new Date(receipt(s.id)!.created_at).toLocaleString() : '—'}</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">{s.detail}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border border-border rounded-xl bg-background p-4">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Engines → Containers (PM)</div>
+              {pmRows.length ? (
+                <div className="space-y-2 text-sm">
+                  {pmRows.map((r: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between gap-3">
+                      <span className="font-mono text-xs text-muted-foreground truncate">{r.engine || '—'}</span>
+                      <span className="text-xs text-muted-foreground">→</span>
+                      <span className="font-mono text-xs text-muted-foreground truncate">{r.container || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No Path Map rows yet.</div>
+              )}
+            </div>
+
+            <div className="border border-border rounded-xl bg-background p-4">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Engine → Subagent (CH)</div>
+              {charterMapping.length ? (
+                <div className="space-y-2 text-sm">
+                  {charterMapping.map((m: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between gap-3">
+                      <span className="font-mono text-xs text-muted-foreground truncate">{m.engine || '—'}</span>
+                      <span className="text-xs text-muted-foreground">→</span>
+                      <span className="font-mono text-xs text-muted-foreground truncate">{m.subagent || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No Charter mappings yet.</div>
+              )}
+            </div>
+
+            <div className="border border-border rounded-xl bg-background p-4 md:col-span-2">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Outputs (Engine → Container)</div>
+              {Object.keys(outputPairs).length ? (
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(outputPairs).map(([k, count]) => (
+                    <span key={k} className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-muted/30 text-xs font-mono text-muted-foreground">
+                      {k}
+                      <span className="px-2 py-0.5 rounded-full bg-background border border-border">{count}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No outputs yet.</div>
+              )}
+            </div>
+
+            <div className="border border-border rounded-xl bg-background p-4">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Retrieval Log</div>
+              <div className="text-sm text-muted-foreground">
+                {Array.isArray(rlPayload?.sources)
+                  ? `${rlPayload.sources.length} source(s)`
+                  : rl ? 'captured' : 'missing'}
+              </div>
+            </div>
+
+            <div className="border border-border rounded-xl bg-background p-4">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Decision</div>
+              <div className="text-sm text-muted-foreground">
+                {dtPayload?.chosen_option || dtPayload?.decision_statement || (dt ? 'captured' : 'missing')}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Context Inputs */}
