@@ -14,19 +14,6 @@ const app = express();
 app.use(cors()); // Allow all origins for MCP
 app.use(express.json());
 
-// --- MCP Transport (recommended for serverless) ---
-// Streamable HTTP is designed to work without a separate /message endpoint and avoids session stickiness issues.
-const mcpHttpTransport = new StreamableHTTPServerTransport({
-    // Stateless mode: no session persistence required (best fit for Vercel serverless).
-    sessionIdGenerator: undefined,
-});
-void server.connect(mcpHttpTransport).catch((e) => {
-    console.error("Failed to connect MCP Streamable HTTP transport", e);
-});
-app.all("/api/mcp", async (req, res) => {
-    await mcpHttpTransport.handleRequest(req, res, (req as any).body);
-});
-
 
 import { z } from "zod";
 import { RunManager } from "../context-vault/api/run-manager.js";
@@ -268,6 +255,21 @@ server.resource(
         };
     }
 );
+
+
+// --- MCP Transport (recommended for serverless) ---
+// Streamable HTTP is designed to work without a separate /message endpoint and avoids session stickiness issues.
+// Important: define all tools/resources BEFORE connecting, otherwise MCP SDK will throw.
+const mcpHttpTransport = new StreamableHTTPServerTransport({
+    // Stateless mode: no session persistence required (best fit for Vercel serverless).
+    sessionIdGenerator: undefined,
+});
+void server.connect(mcpHttpTransport).catch((e) => {
+    console.error("Failed to connect MCP Streamable HTTP transport", e);
+});
+app.all("/api/mcp", async (req, res) => {
+    await mcpHttpTransport.handleRequest(req, res, (req as any).body);
+});
 
 
 // --- UI API Endpoints ---
