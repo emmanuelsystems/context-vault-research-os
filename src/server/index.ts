@@ -22,6 +22,7 @@ import { FileRunManager } from "../context-vault/storage/file-run-manager.js";
 import { ContextManager } from "../context-vault/api/context-manager.js";
 import { prisma } from "../context-vault/client.js";
 import { Catalog } from "../research-os/catalog.js";
+import { PromptLibrary } from "../research-os/prompt-library.js";
 import { put } from "@vercel/blob";
 
 // --- Tools ---
@@ -254,6 +255,30 @@ server.resource(
             }]
         };
     }
+);
+
+server.resource(
+    "prompts_index",
+    "research://prompts",
+    async (uri) => ({
+        contents: [{
+            uri: uri.href,
+            text: JSON.stringify(PromptLibrary.list(), null, 2),
+            mimeType: "application/json"
+        }]
+    })
+);
+
+server.resource(
+    "handshake_prompt_pathmap_v1",
+    "research://prompts/handshake/pathmap-v1",
+    async (uri) => ({
+        contents: [{
+            uri: uri.href,
+            text: PromptLibrary.get('handshake.pathmap.v1'),
+            mimeType: "text/markdown"
+        }]
+    })
 );
 
 
