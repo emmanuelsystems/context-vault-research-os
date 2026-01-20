@@ -15,6 +15,23 @@ import {
 
 const NEW_RUN_ID = '__NEW_RUN__'
 
+const parsePayload = (payload: unknown) => {
+  if (typeof payload !== 'string') return payload
+  try {
+    return JSON.parse(payload)
+  } catch {
+    return payload
+  }
+}
+
+const looksLikeJsonText = (text: string) => {
+  const trimmed = text.trim()
+  return (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  )
+}
+
 function App() {
   const [view, setView] = useState<'runs' | 'memory'>('runs')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -1323,12 +1340,12 @@ function RunView({ runId }: { runId: string }) {
           <span className="text-xs text-muted-foreground font-mono">{run.stake_level || 'medium'}</span>
         </div>
         <div className="divide-y divide-border">
-          {commitPoints.map(cp => {
-            const receipt = (run.receipts || []).find(r => r.commit_point === cp.id);
+          {commitPoints.map((cp) => {
+            const receipt = (run.receipts || []).find((r) => r.commit_point === cp.id)
             return (
               <div key={cp.id} className="p-4 flex items-start gap-3">
                 <div className={`mt-1 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${receipt ? 'bg-green-500/10 text-green-600 border-green-500/20' : 'bg-muted text-muted-foreground border-border'}`}>
-                  {receipt ? <CheckCircle2 className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />}
+                  {receipt ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1347,7 +1364,7 @@ function RunView({ runId }: { runId: string }) {
                   )}
                 </div>
               </div>
-            );
+            )
           })}
         </div>
       </div>
@@ -1388,23 +1405,93 @@ function RunView({ runId }: { runId: string }) {
                   </div>
 
                   {/* Payload View */}
-                  <div className="bg-muted/50 rounded-lg p-3 text-sm font-mono text-muted-foreground overflow-x-auto">
-                    {a.artifact_type === 'PM' && JSON.parse(a.payload).rows ? (
-                      <div className="space-y-1">
-                        {JSON.parse(a.payload).rows.map((row: any, i: number) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <Activity className="w-3 h-3" />
-                            <span>{row.path_name}</span>
-                            <span className="opacity-50">&rarr;</span>
-                            <span className="text-foreground">{row.engine}</span>
+                  <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground overflow-x-auto">
+                    {(() => {
+                      const payload = parsePayload(a.payload)
+
+                      if (a.artifact_type === 'PM' && payload && typeof payload === 'object' && Array.isArray((payload as any).rows)) {
+                        return (
+                          <div className="space-y-1">
+                            {(payload as any).rows.map((row: any, i: number) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <Activity className="w-3 h-3" />
+                                <span>{row.path_name}</span>
+                                <span className="opacity-50">&rarr;</span>
+                                <span className="text-foreground">{row.engine}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <pre className="whitespace-pre-wrap break-all">{
-                        typeof a.payload === 'string' ? a.payload : JSON.stringify(JSON.parse(a.payload), null, 2)
-                      }</pre>
-                    )}
+                        )
+                      }
+
+                      if (a.artifact_type === 'RL' && payload && typeof payload === 'object' && Array.isArray((payload as any).sources)) {
+                        return (
+                          <div className="space-y-2">
+                            <div className="text-xs text-muted-foreground">Sources</div>
+                            <ul className="space-y-1 text-sm">
+                              {(payload as any).sources.map((s: any, i: number) => (
+                                <li key={i} className="break-words">
+                                  {s?.url ? (
+                                    <a className="text-primary underline underline-offset-2" href={s.url} target="_blank" rel="noreferrer">
+                                      {s.url}
+                                    </a>
+                                  ) : (
+                                    <span className="font-mono">{JSON.stringify(s)}</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )
+                      }
+
+                      if (a.artifact_type === 'DT' && payload && typeof payload === 'object') {
+                        const decisionText = (payload as any).decision || (payload as any).choice
+                        if (typeof decisionText === 'string' && decisionText.trim()) {
+                          return (
+                            <div className="whitespace-pre-wrap break-words text-foreground">
+                              {decisionText}
+                            </div>
+                          )
+                        }
+                      }
+
+                      if (a.artifact_type === 'OUTPUT' && payload && typeof payload === 'object') {
+                        const outputText = (payload as any).content
+                        if (typeof outputText === 'string' && outputText.trim()) {
+                          if (looksLikeJsonText(outputText)) {
+                            const parsed = parsePayload(outputText)
+                            if (parsed && typeof parsed === 'object') {
+                              return (
+                                <pre className="whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+                                  {JSON.stringify(parsed, null, 2)}
+                                </pre>
+                              )
+                            }
+                          }
+
+                          return (
+                            <div className="whitespace-pre-wrap break-words text-foreground">
+                              {outputText}
+                            </div>
+                          )
+                        }
+                      }
+
+                      if (typeof payload === 'string') {
+                        return (
+                          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+                            {payload}
+                          </pre>
+                        )
+                      }
+
+                      return (
+                        <pre className="whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+                          {JSON.stringify(payload, null, 2)}
+                        </pre>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1418,7 +1505,7 @@ function RunView({ runId }: { runId: string }) {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
