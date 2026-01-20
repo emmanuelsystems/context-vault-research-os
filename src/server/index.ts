@@ -215,6 +215,56 @@ server.tool(
     }
 );
 
+// 9. Memory Capture (Context Vault)
+server.tool(
+    "capture_context_item",
+    {
+        layer: z.enum(['RAW', 'SENSEMAKING', 'STRUCTURED', 'APPLICATION']).default('RAW'),
+        title: z.string().optional(),
+        project: z.string().optional(),
+        source_type: z.string().optional(),
+        occurred_at: z.string().optional().describe("ISO datetime, e.g. 2026-01-20T12:34:56Z"),
+        people: z.array(z.string()).optional(),
+        topics: z.array(z.string()).optional(),
+        content_text: z.string().optional(),
+        content_ref: z.string().optional(),
+        payload: z.any().optional(),
+        run_id: z.string().optional().describe("If provided, link this context item to the run"),
+        created_by: z.string().optional(),
+    },
+    async (input) => {
+        const item = await ContextManager.createContextItem({
+            layer: input.layer,
+            source_type: input.source_type,
+            title: input.title,
+            project: input.project,
+            people: input.people,
+            topics: input.topics,
+            occurred_at: input.occurred_at,
+            content_text: input.content_text,
+            content_ref: input.content_ref,
+            payload: input.payload,
+            created_by: input.created_by || 'MCP-Agent',
+        });
+
+        if (input.run_id) {
+            await ContextManager.linkContextToRun({
+                run_id: input.run_id,
+                context_item_id: item.id,
+            });
+        }
+
+        return {
+            content: [{
+                type: "text",
+                text: input.run_id
+                    ? `Context Item Captured: ${item.id} (linked to ${input.run_id})`
+                    : `Context Item Captured: ${item.id}`
+            }],
+        };
+    }
+);
+
 
 // --- Resources ---
 
@@ -288,6 +338,18 @@ server.resource(
         contents: [{
             uri: uri.href,
             text: PromptLibrary.get('charter.v1'),
+            mimeType: "text/markdown"
+        }]
+    })
+);
+
+server.resource(
+    "deep_research_prompt_builder_v1",
+    "research://prompts/deep-research/prompt-builder-v1",
+    async (uri) => ({
+        contents: [{
+            uri: uri.href,
+            text: PromptLibrary.get('deep-research.prompt-builder.v1'),
             mimeType: "text/markdown"
         }]
     })
