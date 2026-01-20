@@ -281,6 +281,18 @@ server.resource(
     })
 );
 
+server.resource(
+    "research_charter_template_v1",
+    "research://prompts/charter/v1",
+    async (uri) => ({
+        contents: [{
+            uri: uri.href,
+            text: PromptLibrary.get('charter.v1'),
+            mimeType: "text/markdown"
+        }]
+    })
+);
+
 
 // --- MCP Transport (recommended for serverless) ---
 // Streamable HTTP is designed to work without a separate /message endpoint and avoids session stickiness issues.
