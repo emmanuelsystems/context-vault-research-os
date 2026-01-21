@@ -18,6 +18,7 @@ app.use(express.json());
 import { z } from "zod";
 import { RunManager } from "../context-vault/api/run-manager.js";
 import { ArtifactManager } from "../context-vault/api/artifact-manager.js";
+import { ReceiptManager } from "../context-vault/api/receipt-manager.js";
 import { FileRunManager } from "../context-vault/storage/file-run-manager.js";
 import { ContextManager } from "../context-vault/api/context-manager.js";
 import { prisma } from "../context-vault/client.js";
@@ -423,6 +424,68 @@ app.post("/api/runs", async (req, res) => {
         res.json(run);
     } catch (e: any) {
         res.status(500).json({ error: "Failed to create run", message: e?.message });
+    }
+});
+
+app.post("/api/runs/:id/handshake", async (req, res) => {
+    try {
+        const run_id = req.params.id;
+        const run = await RunManager.getRun(run_id);
+        if (!run) {
+            res.status(404).json({ error: "Run not found" });
+            return;
+        }
+
+        const body = req.body || {};
+        const decision_type = (body.decision_type || '').toString().trim().toLowerCase();
+        const notes = (body.notes || '').toString().trim();
+        const unknowns = Array.isArray(body.unknowns)
+            ? body.unknowns.map((u: any) => (u ?? '').toString().trim()).filter(Boolean)
+            : [];
+        const assumptions = Array.isArray(body.assumptions)
+            ? body.assumptions.map((a: any) => (a ?? '').toString().trim()).filter(Boolean)
+            : [];
+        const assumption_tests = Array.isArray(body.assumption_tests)
+            ? body.assumption_tests.map((a: any) => (a ?? '').toString().trim()).filter(Boolean)
+            : [];
+
+        if (!['choose', 'learn', 'verify', 'compare'].includes(decision_type)) {
+            res.status(400).json({ error: "decision_type must be one of choose|learn|verify|compare" });
+            return;
+        }
+
+        const payload = {
+            run_id,
+            primary_question: (run as any).primary_question,
+            decision_type,
+            notes: notes || undefined,
+            unknowns,
+            assumptions,
+            assumption_tests,
+            status: "Approved",
+        };
+
+        const artifact = await ArtifactManager.addArtifact({
+            run_id,
+            artifact_type: 'HS',
+            payload,
+            status: 'Approved',
+        });
+
+        const receipt = await ReceiptManager.upsertReceipt({
+            run_id,
+            commit_point: 'HS_LOCKED',
+            summary: 'Handshake locked',
+            inputs: [{ type: 'artifact_id', id: artifact.id }],
+            constraints: [`decision_type=${decision_type}`],
+            decision_makers: ['WEB'],
+            outcome: `primary_question locked; decision_type=${decision_type}`,
+            approvals: [{ name: 'WEB', role: 'Approver', approved_at: new Date().toISOString() }],
+        });
+
+        res.json({ artifact, receipt });
+    } catch (e: any) {
+        res.status(500).json({ error: "Failed to create handshake", message: e?.message });
     }
 });
 

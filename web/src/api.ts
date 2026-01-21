@@ -65,6 +65,27 @@ export const api = {
         }
         return res.json();
     },
+    createHandshake: async (
+        runId: string,
+        data: {
+            decision_type: 'choose' | 'learn' | 'verify' | 'compare';
+            notes?: string;
+            unknowns?: string[];
+            assumptions?: string[];
+            assumption_tests?: string[];
+        }
+    ): Promise<{ artifact: any; receipt: DecisionReceipt }> => {
+        const res = await fetch(`${API_BASE}/runs/${runId}/handshake`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (!res.ok) {
+            const payload = await res.json().catch(() => ({}));
+            throw new Error(payload?.message || payload?.error || 'Failed to create handshake');
+        }
+        return res.json();
+    },
     getRun: async (id: string): Promise<RunDetail> => {
         const res = await fetch(`${API_BASE}/runs/${id}`);
         if (!res.ok) throw new Error('Failed to fetch run');

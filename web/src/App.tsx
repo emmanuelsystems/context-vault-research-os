@@ -1054,6 +1054,24 @@ function RunView({ runId }: { runId: string }) {
   const [contextOptions, setContextOptions] = useState<ContextItem[]>([])
   const [attaching, setAttaching] = useState(false)
   const [attachError, setAttachError] = useState<string | null>(null)
+  const [handshakeOpen, setHandshakeOpen] = useState(false)
+  const [handshakeInitialized, setHandshakeInitialized] = useState(false)
+  const [handshakeDecisionType, setHandshakeDecisionType] = useState<'choose' | 'learn' | 'verify' | 'compare'>('choose')
+  const [handshakeNotes, setHandshakeNotes] = useState('')
+  const [handshakeUnknowns, setHandshakeUnknowns] = useState('')
+  const [handshakeAssumptions, setHandshakeAssumptions] = useState('')
+  const [handshakeTests, setHandshakeTests] = useState('')
+  const [handshaking, setHandshaking] = useState(false)
+  const [handshakeError, setHandshakeError] = useState<string | null>(null)
+
+  const safeJsonParse = (raw: any) => {
+    try {
+      const s = typeof raw === 'string' ? raw : JSON.stringify(raw)
+      return JSON.parse(s)
+    } catch {
+      return null
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -1061,10 +1079,42 @@ function RunView({ runId }: { runId: string }) {
   }, [runId])
 
   useEffect(() => {
+    setHandshakeInitialized(false)
+    setHandshakeError(null)
+    setHandshakeOpen(false)
+  }, [runId])
+
+  useEffect(() => {
     api.listContextItems({ layer: 'RAW' })
       .then(setContextOptions)
       .catch(() => setContextOptions([]))
   }, [])
+
+  useEffect(() => {
+    if (!run) return
+    if (handshakeInitialized) return
+
+    const hsList = (run.artifacts || []).filter((a: any) => a.artifact_type === 'HS')
+    const latestHs = hsList.length ? hsList[hsList.length - 1] : null
+    const payload = latestHs ? safeJsonParse(latestHs.payload) : null
+    const receiptPresent = (run.receipts || []).some((r) => r.commit_point === 'HS_LOCKED')
+
+    const dt = (payload?.decision_type || '').toString().toLowerCase()
+    if (dt === 'choose' || dt === 'learn' || dt === 'verify' || dt === 'compare') {
+      setHandshakeDecisionType(dt)
+    }
+    setHandshakeNotes((payload?.notes || '').toString())
+
+    const u = Array.isArray(payload?.unknowns) ? payload.unknowns : []
+    const a = Array.isArray(payload?.assumptions) ? payload.assumptions : []
+    const t = Array.isArray(payload?.assumption_tests) ? payload.assumption_tests : []
+    setHandshakeUnknowns(u.map((x: any) => (x ?? '').toString()).filter(Boolean).join('\n'))
+    setHandshakeAssumptions(a.map((x: any) => (x ?? '').toString()).filter(Boolean).join('\n'))
+    setHandshakeTests(t.map((x: any) => (x ?? '').toString()).filter(Boolean).join('\n'))
+
+    setHandshakeOpen(!receiptPresent)
+    setHandshakeInitialized(true)
+  }, [run, handshakeInitialized])
 
   const attachContext = async () => {
     const id = (attachContextPick || attachContextId).trim()
@@ -1086,15 +1136,6 @@ function RunView({ runId }: { runId: string }) {
 
   if (loading) return <div className="p-10 text-center animate-pulse text-muted-foreground">Retrieving context...</div>;
   if (!run) return <div className="p-10 text-center text-destructive">Run not found.</div>;
-
-  const safeJsonParse = (raw: any) => {
-    try {
-      const s = typeof raw === 'string' ? raw : JSON.stringify(raw)
-      return JSON.parse(s)
-    } catch {
-      return null
-    }
-  }
 
   const latestArtifact = (type: string) => {
     const list = (run.artifacts || []).filter((a: any) => a.artifact_type === type)
@@ -1126,6 +1167,41 @@ function RunView({ runId }: { runId: string }) {
   }, {})
 
   const receipt = (cp: DecisionReceipt['commit_point']) => (run.receipts || []).find(r => r.commit_point === cp)
+  const hsLocked = !!receipt('HS_LOCKED')
+
+  const splitUnknowns = (raw: string) =>
+    raw
+      .split(/\r?\n|,/g)
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+  const splitLines = (raw: string) =>
+    raw
+      .split(/\r?\n/g)
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+  const submitHandshake = async () => {
+    setHandshakeError(null)
+    setHandshaking(true)
+    try {
+      await api.createHandshake(runId, {
+        decision_type: handshakeDecisionType,
+        notes: handshakeNotes.trim() || undefined,
+        unknowns: splitUnknowns(handshakeUnknowns),
+        assumptions: splitLines(handshakeAssumptions),
+        assumption_tests: splitLines(handshakeTests),
+      })
+
+      const updated = await api.getRun(runId)
+      setRun(updated)
+      setHandshakeOpen(false)
+    } catch (e: any) {
+      setHandshakeError(e?.message || 'Failed to create handshake')
+    } finally {
+      setHandshaking(false)
+    }
+  }
 
   const steps = [
     {
@@ -1173,6 +1249,120 @@ function RunView({ runId }: { runId: string }) {
           <h1 className="text-3xl font-bold">{run.title}</h1>
         </div>
         <p className="text-lg text-muted-foreground">{run.primary_question}</p>
+      </div>
+
+      {/* Handshake */}
+      <div className="border border-border rounded-xl bg-card overflow-hidden">
+        <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold">Handshake</h3>
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                hsLocked
+                  ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                  : 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+              }`}
+            >
+              {hsLocked ? 'LOCKED' : 'MISSING'}
+            </span>
+            <button
+              onClick={() => setHandshakeOpen((v) => !v)}
+              className="px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted/40 text-sm"
+            >
+              {handshakeOpen ? 'Close' : hsLocked ? 'Edit' : 'Create'}
+            </button>
+          </div>
+        </div>
+        <div className="p-6 space-y-4">
+          {hsPayload ? (
+            <div className="text-sm text-muted-foreground">
+              <span className="font-mono">decision_type</span>: {hsPayload.decision_type || '—'}
+              {Array.isArray(hsPayload.unknowns) && hsPayload.unknowns.length ? (
+                <span>{' · '}unknowns: {hsPayload.unknowns.length}</span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              No handshake yet. Create one to lock the primary question, unknowns, and assumptions before Path Map.
+            </div>
+          )}
+
+          {handshakeOpen ? (
+            <div className="border border-border rounded-xl bg-background p-4 space-y-4">
+              {handshakeError && <div className="text-sm text-destructive">{handshakeError}</div>}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="text-sm space-y-1">
+                  <div className="text-muted-foreground">Decision type</div>
+                  <select
+                    value={handshakeDecisionType}
+                    onChange={(e) => setHandshakeDecisionType(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="choose">choose</option>
+                    <option value="learn">learn</option>
+                    <option value="verify">verify</option>
+                    <option value="compare">compare</option>
+                  </select>
+                </label>
+
+                <label className="text-sm space-y-1">
+                  <div className="text-muted-foreground">Notes (optional)</div>
+                  <input
+                    value={handshakeNotes}
+                    onChange={(e) => setHandshakeNotes(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="Short context for this run…"
+                  />
+                </label>
+              </div>
+
+              <label className="text-sm space-y-1">
+                <div className="text-muted-foreground">Unknowns (comma or newline separated)</div>
+                <textarea
+                  value={handshakeUnknowns}
+                  onChange={(e) => setHandshakeUnknowns(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="What do we still not know that affects the decision?"
+                />
+              </label>
+
+              <label className="text-sm space-y-1">
+                <div className="text-muted-foreground">Assumptions (one per line)</div>
+                <textarea
+                  value={handshakeAssumptions}
+                  onChange={(e) => setHandshakeAssumptions(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="Assumptions we’re making for now…"
+                />
+              </label>
+
+              <label className="text-sm space-y-1">
+                <div className="text-muted-foreground">Assumption test plan (one per line)</div>
+                <textarea
+                  value={handshakeTests}
+                  onChange={(e) => setHandshakeTests(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="How we’ll test / what would change our mind…"
+                />
+              </label>
+
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={submitHandshake}
+                  disabled={handshaking}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-60"
+                >
+                  {handshaking ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Lock handshake
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Run Steps (Engines/Containers/Subagents) */}
